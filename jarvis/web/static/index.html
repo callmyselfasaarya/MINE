@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M.I.N.E - Personal AI Assistant HUD</title>
+  <meta name="description" content="M.I.N.E Version 1 MVP - Voice-enabled personal desktop assistant with tool calling, context memory, reminders, system actions, and guardrails.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/hud.css">
+</head>
+<body>
+
+  <!-- Top Navigation HUD Bar -->
+  <header class="hud-header" id="hudHeader">
+    <div class="brand-section">
+      <div class="brand-icon">
+        <div class="brand-icon-inner"></div>
+      </div>
+      <div>
+        <h1 class="brand-title">M.I.N.E</h1>
+        <div class="brand-subtitle">Personal Desktop AI Assistant • v1.0 MVP</div>
+      </div>
+    </div>
+
+    <div class="hud-status-bar">
+      <div class="status-badge" id="aiStatusBadge">
+        <span class="status-dot"></span>
+        <span id="aiIndicator">INITIALIZING...</span>
+      </div>
+      <div class="hud-actions">
+        <button class="hud-btn active" id="audioToggleBtn" title="Toggle voice text-to-speech">
+          🔊 AUDIO: ON
+        </button>
+        <button class="hud-btn" id="settingsBtn" title="Settings & API Key">
+          ⚙️ CONFIG
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Three-Column HUD Layout -->
+  <main class="hud-container" id="hudContainer">
+
+    <!-- Left Column: System Hardware & Memory -->
+    <aside class="left-column" id="leftTelemetryPanel">
+      
+      <!-- System Telemetry Widget -->
+      <section class="hud-panel" id="telemetryPanel">
+        <div class="panel-header">
+          <div class="panel-title">🖥️ SYSTEM VITALS</div>
+          <span class="panel-badge">REAL-TIME</span>
+        </div>
+        <div class="telemetry-grid">
+          <div class="telemetry-card">
+            <span class="telemetry-label">CPU LOAD</span>
+            <span class="telemetry-value" id="cpuVal">0%</span>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="cpuBar" style="width: 0%;"></div></div>
+          </div>
+          <div class="telemetry-card">
+            <span class="telemetry-label">RAM USED</span>
+            <span class="telemetry-value" id="ramVal">0%</span>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="ramBar" style="width: 0%;"></div></div>
+          </div>
+        </div>
+        <div class="telemetry-card" style="margin-top: 4px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span class="telemetry-label">POWER STATE</span>
+            <span class="telemetry-value" style="font-size: 0.85rem;" id="batteryVal">DETECTING...</span>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="batteryBar" style="width: 0%;"></div></div>
+        </div>
+      </section>
+
+      <!-- Calendar Schedule Widget -->
+      <section class="hud-panel" id="calendarPanel">
+        <div class="panel-header">
+          <div class="panel-title">📅 SCHEDULE</div>
+          <span class="panel-badge">UPCOMING</span>
+        </div>
+        <div class="item-list" id="calendarList">
+          <div style="color:var(--text-dim);font-size:0.75rem;padding:6px;">Loading schedule...</div>
+        </div>
+      </section>
+
+      <!-- Long-Term Memory Widget -->
+      <section class="hud-panel" id="memoryPanel">
+        <div class="panel-header">
+          <div class="panel-title">🧠 MEMORY BANK</div>
+          <span class="panel-badge">PERSISTENT</span>
+        </div>
+        <div class="item-list" id="memoryList">
+          <div style="color:var(--text-dim);font-size:0.75rem;padding:6px;">Recalling facts...</div>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- Center Column: Arc Reactor Core, Audio Visualizer, & Voice Interface -->
+    <section class="center-column" id="centerCorePanel">
+      
+      <div class="core-section">
+        <!-- Interactive Arc Reactor Voice Orb -->
+        <div class="arc-reactor-wrapper" id="arcReactor" title="Click to Speak to MINE">
+          <div class="reactor-outer-ring"></div>
+          <div class="reactor-middle-ring"></div>
+          <div class="reactor-core">
+            <svg viewBox="0 0 24 24" id="reactorMicSvg">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="state-label" id="reactorStatus">SYSTEM ONLINE</div>
+
+        <!-- Canvas Waveform Visualizer -->
+        <div class="waveform-container">
+          <canvas id="audioVisualizer"></canvas>
+        </div>
+      </div>
+
+      <!-- Quick Action Prompt Chips -->
+      <div class="quick-prompts" id="quickPromptsContainer">
+        <button class="prompt-chip" data-prompt="Mine, remind me tomorrow at 8 AM to submit my project.">
+          ⏰ Remind me tomorrow at 8 AM to submit project
+        </button>
+        <button class="prompt-chip" data-prompt="What is my computer system status?">
+          🖥️ System status
+        </button>
+        <button class="prompt-chip" data-prompt="Remember that my favorite beverage is black coffee with oat milk.">
+          🧠 Remember my coffee preference
+        </button>
+        <button class="prompt-chip" data-prompt="Search the web for latest breakthroughs in quantum computing.">
+          🔎 Search quantum computing
+        </button>
+        <button class="prompt-chip" data-prompt="Schedule team sprint sync for tomorrow at 10 AM.">
+          📅 Schedule sprint sync
+        </button>
+      </div>
+
+      <!-- Command Input Dock -->
+      <div class="input-dock" id="commandDock">
+        <input type="text" class="cmd-input" id="cmdInput" placeholder="Speak or enter command for MINE..." autocomplete="off">
+        <button class="dock-btn mic-btn" id="micBtn" title="Hold or click to speak">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+        <button class="dock-btn" id="sendBtn" title="Transmit command">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Right Column: Conversation Stream & Active Reminders -->
+    <aside class="right-column" id="rightStreamPanel">
+
+      <!-- Conversation Stream -->
+      <section class="hud-panel conversation-panel" id="conversationPanel">
+        <div class="panel-header">
+          <div class="panel-title">💬 CONVERSATION STREAM</div>
+          <span class="panel-badge">LIVE</span>
+        </div>
+        <div class="chat-stream" id="chatStream">
+          <div class="chat-bubble mine jarvis">
+            <div>Greetings, Sir. M.I.N.E Version 1 MVP is active and listening. Ready for your instructions.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Reminders Panel -->
+      <section class="hud-panel" id="remindersPanel" style="max-height: 200px;">
+        <div class="panel-header">
+          <div class="panel-title">⏰ REMINDERS</div>
+          <span class="panel-badge">DAEMON ACTIVE</span>
+        </div>
+        <div class="item-list" id="remindersList">
+          <div style="color:var(--text-dim);font-size:0.75rem;padding:6px;">No reminders set</div>
+        </div>
+      </section>
+
+      <!-- User Documents Panel -->
+      <section class="hud-panel" id="documentsPanel" style="max-height: 160px;">
+        <div class="panel-header">
+          <div class="panel-title">📁 DOCUMENTS & FILES</div>
+          <span class="panel-badge">STORAGE</span>
+        </div>
+        <div class="item-list" id="docsList">
+          <div style="color:var(--text-dim);font-size:0.75rem;padding:6px;">No files created yet</div>
+        </div>
+      </section>
+
+    </aside>
+
+  </main>
+
+  <!-- Emergency Hazard Confirmation Modal -->
+  <div class="modal-overlay" id="hazardModal">
+    <div class="hazard-modal danger" id="hazardCard">
+      <div class="hazard-header">
+        <div class="hazard-icon">⚠️</div>
+        <div>
+          <div class="hazard-title">SECURITY CONFIRMATION REQUIRED</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted);">SAFETY GUARDRAILS ACTIVE</div>
+        </div>
+      </div>
+      <div class="hazard-message" id="hazardMessage">
+        Action requires explicit authorization.
+      </div>
+      <div class="hazard-actions">
+        <button class="btn-abort" id="btnAbort">ABORT ACTION (NO)</button>
+        <button class="btn-authorize" id="btnAuthorize">AUTHORIZE ACTION (YES)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings / Configuration Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="settings-modal" id="settingsCard">
+      <div class="panel-header">
+        <div class="panel-title">⚙️ SYSTEM CONFIGURATION</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="apiKeyInput">Google Gemini API Key</label>
+        <input type="password" class="form-input" id="apiKeyInput" placeholder="Enter your Gemini API key (optional)">
+        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+          Without an API key, MINE operates smoothly via the built-in Local Intent Engine.
+        </div>
+      </div>
+      <div class="hazard-actions" style="margin-top: 14px;">
+        <button class="btn-abort" id="closeSettingsBtn">CANCEL</button>
+        <button class="hud-btn" id="saveSettingsBtn" style="padding: 8px 18px;">SAVE SETTINGS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/js/visualizer.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
