@@ -42,6 +42,9 @@ class MineHUDApp {
     this.settingsModal = document.getElementById('settingsModal');
     this.closeSettingsBtn = document.getElementById('closeSettingsBtn');
     this.saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    this.providerSelect = document.getElementById('providerSelect');
+    this.ollamaModelInput = document.getElementById('ollamaModelInput');
+    this.ollamaUrlInput = document.getElementById('ollamaUrlInput');
     this.apiKeyInput = document.getElementById('apiKeyInput');
 
     // Widgets
@@ -301,11 +304,20 @@ class MineHUDApp {
     });
 
     this.saveSettingsBtn.addEventListener('click', async () => {
-      const key = this.apiKeyInput.value.trim();
+      const provider = this.providerSelect ? this.providerSelect.value : 'ollama';
+      const ollamaModel = this.ollamaModelInput ? this.ollamaModelInput.value.trim() : 'llama3.2';
+      const ollamaUrl = this.ollamaUrlInput ? this.ollamaUrlInput.value.trim() : 'http://localhost:11434';
+      const key = this.apiKeyInput ? this.apiKeyInput.value.trim() : '';
+
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gemini_api_key: key })
+        body: JSON.stringify({
+          provider: provider,
+          ollama_model: ollamaModel,
+          ollama_url: ollamaUrl,
+          gemini_api_key: key
+        })
       });
       this.settingsModal.classList.remove('active');
       this.loadState();
@@ -406,13 +418,24 @@ class MineHUDApp {
     // AI Status Indicator
     const aiIndicator = document.getElementById('aiIndicator');
     if (aiIndicator) {
-      if (state.gemini_active) {
-        aiIndicator.textContent = `GEMINI (${state.model_name})`;
+      const label = state.active_label || 'LOCAL INTENT ENGINE';
+      aiIndicator.textContent = label;
+      if (label.includes('OLLAMA') && !label.includes('OFFLINE')) {
         aiIndicator.style.color = '#00f3ff';
+      } else if (label.includes('GEMINI')) {
+        aiIndicator.style.color = '#0088ff';
+      } else if (label.includes('OFFLINE')) {
+        aiIndicator.style.color = '#ffb700';
       } else {
-        aiIndicator.textContent = 'LOCAL INTENT ENGINE';
         aiIndicator.style.color = '#00ffaa';
       }
+    }
+
+    // Sync input values when settings modal is opened
+    if (state.llm_info && this.settingsModal && !this.settingsModal.classList.contains('active')) {
+      if (this.providerSelect) this.providerSelect.value = state.llm_info.provider || 'ollama';
+      if (this.ollamaModelInput && state.llm_info.ollama_model) this.ollamaModelInput.value = state.llm_info.ollama_model;
+      if (this.ollamaUrlInput && state.llm_info.ollama_url) this.ollamaUrlInput.value = state.llm_info.ollama_url;
     }
 
     // Telemetry

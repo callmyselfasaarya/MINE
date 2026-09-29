@@ -75,8 +75,11 @@ class ChatRequest(BaseModel):
 
 
 class SettingsRequest(BaseModel):
+    provider: str = ""
+    ollama_model: str = ""
+    ollama_url: str = ""
     gemini_api_key: str = ""
-    model_name: str = ""
+    gemini_model: str = ""
 
 
 class ReminderRequest(BaseModel):
@@ -146,11 +149,14 @@ async def trigger_server_mic():
 
 @app.post("/api/settings")
 async def update_settings(req: SettingsRequest):
-    if req.gemini_api_key:
-        jarvis_agent.llm.reload_key(req.gemini_api_key)
-    if req.model_name:
-        jarvis_agent.llm.model_name = req.model_name
-    return {"success": True, "gemini_active": jarvis_agent.llm.is_gemini_active(), "model": jarvis_agent.llm.model_name}
+    status = jarvis_agent.llm.configure(
+        provider=req.provider or None,
+        ollama_model=req.ollama_model or None,
+        ollama_url=req.ollama_url or None,
+        gemini_api_key=req.gemini_api_key if req.gemini_api_key != "" else None,
+        gemini_model=req.gemini_model or None
+    )
+    return {"success": True, "settings": status, "state": jarvis_agent.get_dashboard_state()}
 
 
 @app.post("/api/reminders")

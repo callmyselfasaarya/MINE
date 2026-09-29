@@ -23,6 +23,12 @@ ASSISTANT_NAME = os.getenv("ASSISTANT_NAME", "MINE")
 USER_NAME = os.getenv("USER_NAME", "Sir")
 
 # AI / LLM Configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()  # "ollama", "gemini", "local"
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+OLLAMA_URL = os.getenv("OLLAMA_URL", f"{OLLAMA_HOST}/api/chat")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "25"))
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")).strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 

@@ -56,17 +56,32 @@ Ensure Python 3.10+ is installed. Dependencies are listed in `requirements.txt`:
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Configure Gemini API Key
-To enable full generative reasoning with Gemini 2.5 Flash:
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Add your free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey):
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
-> *Note: If no API key is provided, MINE functions out-of-the-box using its built-in Local Intent Engine.*
+### 2. Configure LLM Provider (Ollama or Gemini)
+
+**Option 1: Ollama Local LLM (Default & Recommended for 100% Privacy)**
+MINE natively integrates with [Ollama](https://ollama.com/) for entirely local, private, and offline-capable intelligence:
+```bash
+# Pull and start the default Llama 3.2 model
+ollama run llama3.2
+```
+In your `.env`:
+```env
+LLM_PROVIDER=ollama
+OLLAMA_URL=http://localhost:11434/api/chat
+OLLAMA_MODEL=llama3.2
+```
+MINE communicates via:
+$$\text{User} \longrightarrow \text{Python Assistant} \longrightarrow \text{Ollama} \longrightarrow \text{Local LLM} \longrightarrow \text{Assistant} \longrightarrow \text{User}$$
+
+**Option 2: Google Gemini (Cloud Reasoning)**
+Add your free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) in `.env`:
+```env
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+> *Note: If Ollama or Gemini are offline or unconfigured, MINE automatically falls back to its built-in rule-based Local Intent Engine with zero downtime.*
 
 ---
 

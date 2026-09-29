@@ -3,12 +3,11 @@ import warnings
 from typing import Any, Dict, List
 import wikipedia
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    try:
-        from ddgs import DDGS
-    except ImportError:
-        from duckduckgo_search import DDGS
+warnings.filterwarnings("ignore", message=".*renamed to `ddgs`.*")
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS
 
 from jarvis.tools.registry import register_tool
 
@@ -22,12 +21,17 @@ logger = logging.getLogger(__name__)
         "max_results": {"type": "int", "description": "Maximum number of search results to return (default 4)", "required": False}
     }
 )
-def search_web(query: str, max_results: int = 4) -> List[Dict[str, str]]:
+def search_web(query: str, max_results: Any = 4) -> List[Dict[str, str]]:
     """Search DuckDuckGo and return concise titles, snippets, and links."""
     try:
+        try:
+            num_results = int(max_results)
+        except (ValueError, TypeError):
+            num_results = 4
+
         results = []
         with DDGS() as ddgs:
-            raw_results = list(ddgs.text(query, max_results=max_results))
+            raw_results = list(ddgs.text(query, max_results=num_results))
             for r in raw_results:
                 results.append({
                     "title": r.get("title", ""),

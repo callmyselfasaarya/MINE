@@ -86,7 +86,7 @@ def list_files(directory: str = "") -> Dict[str, Any]:
 
 @register_tool(
     name="create_document",
-    description="Create a new document, note, or file with given text content.",
+    description="Create a new document, note, or text file on disk with given filename and content. Do NOT use this for personal memory or preferences (use remember_fact for that).",
     parameters={
         "filename": {"type": "string", "description": "Name of the file (e.g. 'meeting_notes.txt', 'project_plan.md')", "required": True},
         "content": {"type": "string", "description": "The text content of the document", "required": True}

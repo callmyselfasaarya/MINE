@@ -1,9 +1,9 @@
 {
   "coffee_preference": {
-    "title": "coffee preference",
-    "value": "black coffee.",
+    "title": "coffee_preference",
+    "value": "black coffee",
     "category": "preference",
-    "updated_at": "2026-09-29T21:37:39.216500"
+    "updated_at": "2026-09-29T22:02:46.793465"
   },
   "general_note": {
     "title": "general_note",

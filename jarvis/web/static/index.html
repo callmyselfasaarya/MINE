@@ -226,13 +226,32 @@
       <div class="panel-header">
         <div class="panel-title">⚙️ SYSTEM CONFIGURATION</div>
       </div>
+
       <div class="form-group">
-        <label class="form-label" for="apiKeyInput">Google Gemini API Key</label>
-        <input type="password" class="form-input" id="apiKeyInput" placeholder="Enter your Gemini API key (optional)">
+        <label class="form-label" for="providerSelect">Primary AI Engine</label>
+        <select class="form-input" id="providerSelect">
+          <option value="ollama">🦙 Ollama (Local LLM)</option>
+          <option value="gemini">✨ Google Gemini Cloud</option>
+          <option value="local">⚡ Local Rule Intent Engine</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="ollamaSettingsGroup">
+        <label class="form-label" for="ollamaModelInput">Ollama Model</label>
+        <input type="text" class="form-input" id="ollamaModelInput" value="llama3.2" placeholder="e.g. llama3.2, llama3.1, mistral, qwen2.5">
+        
+        <label class="form-label" for="ollamaUrlInput" style="margin-top: 8px;">Ollama Server URL</label>
+        <input type="text" class="form-input" id="ollamaUrlInput" value="http://localhost:11434" placeholder="http://localhost:11434">
         <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
-          Without an API key, MINE operates smoothly via the built-in Local Intent Engine.
+          Make sure Ollama is running (`ollama run llama3.2`). If offline, MINE falls back automatically to the local engine.
         </div>
       </div>
+
+      <div class="form-group" style="margin-top: 6px;">
+        <label class="form-label" for="apiKeyInput">Google Gemini API Key (Optional)</label>
+        <input type="password" class="form-input" id="apiKeyInput" placeholder="Enter Gemini API key">
+      </div>
+
       <div class="hazard-actions" style="margin-top: 14px;">
         <button class="btn-abort" id="closeSettingsBtn">CANCEL</button>
         <button class="hud-btn" id="saveSettingsBtn" style="padding: 8px 18px;">SAVE SETTINGS</button>

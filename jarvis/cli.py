@@ -30,7 +30,7 @@ def print_status_table():
     table.add_column("Module", style="bold white")
     table.add_column("Status / Count", style="green")
 
-    ai_mode = f"Gemini ({state['model_name']})" if state["gemini_active"] else "Local Intent Engine (Active)"
+    ai_mode = state.get("active_label", "Local Intent Engine (Active)")
     table.add_row("🧠 AI Brain", ai_mode)
 
     sys_info = state.get("system_status", {})

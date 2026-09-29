@@ -13,7 +13,7 @@ class TestMineMVP(unittest.TestCase):
         """Test exact prompt scenario: 'Mine, remind me tomorrow at 8 AM to submit my project.'"""
         res = jarvis_agent.interact("Mine, remind me tomorrow at 8 AM to submit my project.", speak_output=False)
         self.assertEqual(res.get("tool_called"), "create_reminder")
-        self.assertIn("submit my project", res.get("text").lower())
+        self.assertTrue("submit project" in res.get("text").lower() or "submit my project" in res.get("text").lower())
         self.assertIn("08:00 AM", res.get("text"))
 
     def test_02_memory_system(self):

@@ -100,7 +100,7 @@ def parse_natural_time(time_str: str) -> Optional[datetime]:
 
 @register_tool(
     name="create_reminder",
-    description="Set a time-based reminder for the user. Example: 'tomorrow at 8 AM', 'in 30 minutes'.",
+    description="Set a scheduled, time-based reminder or alert for the user that triggers at a specific time or date (e.g. 'tomorrow at 8 AM', 'in 30 minutes'). Requires a time or date. Do NOT use for storing general facts, preferences, or details (use remember_fact instead).",
     parameters={
         "title": {"type": "string", "description": "What to remind the user about (e.g., 'submit project', 'call John')", "required": True},
         "due_time": {"type": "string", "description": "When to trigger the reminder (e.g. 'tomorrow at 8 AM', 'in 15 minutes', '2026-09-30 08:00')", "required": True},

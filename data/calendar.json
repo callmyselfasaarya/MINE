@@ -38,5 +38,35 @@
     "duration_minutes": 60,
     "description": "",
     "created_at": "2026-09-29T21:37:39.218795"
+  },
+  {
+    "id": "34b112db",
+    "title": "Quarterly Project Review",
+    "date": "2026-10-05",
+    "time": "02:00 PM",
+    "datetime_iso": "2026-10-05T14:00:09.383713",
+    "duration_minutes": "0",
+    "description": "Quarterly project review",
+    "created_at": "2026-09-29T21:59:09.385208"
+  },
+  {
+    "id": "c36ac0b7",
+    "title": "Quarterly Project Review",
+    "date": "2026-10-05",
+    "time": "02:00 PM",
+    "datetime_iso": "2026-10-05T14:00:33.644732",
+    "duration_minutes": "0",
+    "description": "",
+    "created_at": "2026-09-29T22:01:33.645245"
+  },
+  {
+    "id": "56572e44",
+    "title": "Quarterly project review",
+    "date": "2026-10-05",
+    "time": "02:00 PM",
+    "datetime_iso": "2026-10-05T14:00:53.102712",
+    "duration_minutes": "60",
+    "description": "Project review and planning",
+    "created_at": "2026-09-29T22:02:53.103304"
   }
 ]

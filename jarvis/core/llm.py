@@ -1,13 +1,43 @@
 import json
 import logging
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
-
-from jarvis.config import GEMINI_API_KEY, GEMINI_MODEL, ASSISTANT_NAME, USER_NAME
+import requests
+from jarvis.config import (
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    ASSISTANT_NAME,
+    USER_NAME,
+    LLM_PROVIDER,
+    OLLAMA_HOST,
+    OLLAMA_URL,
+    OLLAMA_MODEL,
+    OLLAMA_TIMEOUT
+)
 from jarvis.tools.registry import registry
 from jarvis.core.guardrails import guardrails
 
 logger = logging.getLogger(__name__)
+
+
+def ask_ollama(message: str, model: str = OLLAMA_MODEL, url: str = OLLAMA_URL) -> str:
+    """
+    Direct standalone helper to query Ollama local LLM chat endpoint.
+    User -> Python Assistant -> Ollama -> Local LLM -> Assistant -> User
+    """
+    response = requests.post(
+        url,
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": message}],
+            "stream": False
+        },
+        timeout=(2.0, OLLAMA_TIMEOUT)
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data["message"]["content"]
 
 
 class LocalIntentEngine:
@@ -149,6 +179,13 @@ class LocalIntentEngine:
 class LLMClient:
     def __init__(self):
         self.local_engine = LocalIntentEngine()
+        self.provider = LLM_PROVIDER
+        self.ollama_url = OLLAMA_URL
+        self.ollama_model = OLLAMA_MODEL
+        self.ollama_timeout = OLLAMA_TIMEOUT
+        self._last_ollama_check = 0.0
+        self._ollama_online = False
+
         self.api_key = GEMINI_API_KEY
         self.model_name = GEMINI_MODEL
         self._genai_client = None
@@ -161,6 +198,29 @@ class LLMClient:
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client: {e}")
                 self._genai_client = None
+
+    def configure(
+        self,
+        provider: Optional[str] = None,
+        ollama_model: Optional[str] = None,
+        ollama_url: Optional[str] = None,
+        gemini_api_key: Optional[str] = None,
+        gemini_model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update provider and model settings at runtime."""
+        if provider:
+            self.provider = provider.lower().strip()
+        if ollama_model:
+            self.ollama_model = ollama_model.strip()
+        if ollama_url:
+            self.ollama_url = ollama_url.strip()
+            self._last_ollama_check = 0.0
+        if gemini_model:
+            self.model_name = gemini_model.strip()
+        if gemini_api_key is not None:
+            self.reload_key(gemini_api_key)
+
+        return self.get_status_info()
 
     def reload_key(self, new_key: str):
         """Update API key at runtime if user sets it in HUD."""
@@ -178,13 +238,48 @@ class LLMClient:
     def is_gemini_active(self) -> bool:
         return self._genai_client is not None and bool(self.api_key)
 
+    def is_ollama_active(self, force_refresh: bool = False) -> bool:
+        """Fast cached check to verify if the Ollama daemon is reachable."""
+        now = time.time()
+        if not force_refresh and (now - self._last_ollama_check) < 4.0:
+            return self._ollama_online
+
+        self._last_ollama_check = now
+        try:
+            host = self.ollama_url.rsplit("/api/", 1)[0] if "/api/" in self.ollama_url else self.ollama_url.rsplit("/", 1)[0]
+            resp = requests.get(f"{host}/api/tags", timeout=0.6)
+            self._ollama_online = (resp.status_code == 200)
+        except Exception:
+            self._ollama_online = False
+        return self._ollama_online
+
+    def get_status_info(self) -> Dict[str, Any]:
+        ollama_online = self.is_ollama_active()
+        active_label = "LOCAL INTENT ENGINE"
+        if self.provider == "ollama" and ollama_online:
+            active_label = f"OLLAMA ({self.ollama_model})"
+        elif self.provider == "gemini" and self.is_gemini_active():
+            active_label = f"GEMINI ({self.model_name})"
+        elif self.provider == "ollama" and not ollama_online:
+            active_label = f"OLLAMA OFFLINE (FALLBACK ACTIVE)"
+
+        return {
+            "provider": self.provider,
+            "ollama_active": ollama_online,
+            "ollama_model": self.ollama_model,
+            "ollama_url": self.ollama_url,
+            "gemini_active": self.is_gemini_active(),
+            "gemini_model": self.model_name,
+            "active_label": active_label
+        }
+
     def process(
         self,
         user_text: str,
         conversation_manager
     ) -> Dict[str, Any]:
         """
-        Main pipeline: Speech-to-text -> LLM -> Tool Call -> Confirmation -> Response
+        Main pipeline: Speech-to-text -> LLM (Ollama/Gemini/Local) -> Tool Call -> Confirmation -> Response
         """
         clean_text = user_text.strip()
         lower = clean_text.lower()
@@ -226,15 +321,130 @@ class LLMClient:
         # Step 1: Add user message to conversation history
         conversation_manager.add_user_message(clean_text)
 
-        # Step 2: Try Gemini API if key is present
-        if self.is_gemini_active():
-            try:
-                return self._process_with_gemini(clean_text, conversation_manager)
-            except Exception as e:
-                logger.warning(f"Gemini API execution error: {e}. Falling back to local intent parser.")
+        # Step 2: Try Ollama Local LLM
+        if self.provider == "ollama":
+            ollama_result = self._process_with_ollama(clean_text, conversation_manager)
+            if ollama_result:
+                return ollama_result
 
-        # Step 3: Fallback to Local Intent Parser
+        # Step 3: Try Gemini API if provider is gemini or fallback
+        if self.provider == "gemini" or (self.provider == "ollama" and self.is_gemini_active()):
+            if self.is_gemini_active():
+                try:
+                    return self._process_with_gemini(clean_text, conversation_manager)
+                except Exception as e:
+                    logger.warning(f"Gemini API execution error: {e}. Falling back to local intent parser.")
+
+        # Step 4: Fallback to built-in Local Intent Parser
         return self._process_with_local_intent(clean_text, conversation_manager)
+
+    def _process_with_ollama(self, user_text: str, conversation_manager) -> Optional[Dict[str, Any]]:
+        # Fast exit if daemon is unreachable to eliminate latency
+        if not self.is_ollama_active():
+            logger.debug("Ollama daemon is not reachable. Using fallback engine.")
+            return None
+
+        system_instruction = conversation_manager.get_system_instruction()
+        messages = [{"role": "system", "content": system_instruction}]
+
+        for msg in conversation_manager.get_messages():
+            role = "user" if msg["role"] == "user" else "assistant"
+            messages.append({"role": role, "content": msg.get("content", "")})
+
+        tools = registry.get_ollama_declarations()
+        payload = {
+            "model": self.ollama_model,
+            "messages": messages,
+            "stream": False,
+            "tools": tools
+        }
+
+        try:
+            logger.info(f"Querying Ollama at {self.ollama_url} with model '{self.ollama_model}'...")
+            req_timeout = (1.5, self.ollama_timeout)
+            response = requests.post(self.ollama_url, json=payload, timeout=req_timeout)
+
+            # If model does not support tools parameter (HTTP 400), retry standard chat
+            if response.status_code == 400 and "tools" in payload:
+                logger.warning(f"Ollama model '{self.ollama_model}' rejected tools parameter. Retrying standard chat...")
+                payload.pop("tools")
+                response = requests.post(self.ollama_url, json=payload, timeout=req_timeout)
+
+            response.raise_for_status()
+            data = response.json()
+            msg_obj = data.get("message", {})
+
+            # Check for tool_calls from Ollama
+            tool_calls = msg_obj.get("tool_calls", [])
+            if tool_calls:
+                tc = tool_calls[0]
+                fn = tc.get("function", {})
+                tool_name = fn.get("name")
+                tool_args = fn.get("arguments", {})
+                if isinstance(tool_args, str):
+                    try:
+                        tool_args = json.loads(tool_args)
+                    except Exception:
+                        tool_args = {}
+
+                logger.info(f"Ollama proposed tool call: {tool_name} with args {tool_args}")
+
+                # Safety guardrail check
+                safety_check = guardrails.check_tool_safety(tool_name, tool_args)
+                if safety_check:
+                    msg = safety_check["message"]
+                    conversation_manager.add_assistant_message(msg)
+                    return {
+                        "text": msg,
+                        "tool_called": tool_name,
+                        "tool_args": tool_args,
+                        "status": "requires_confirmation",
+                        "requires_confirmation": True,
+                        "action_id": safety_check["action_id"],
+                        "provider": f"ollama ({self.ollama_model})"
+                    }
+
+                # Execute tool
+                exec_result = registry.execute(tool_name, **tool_args)
+                res_val = exec_result.get("result")
+
+                if isinstance(res_val, dict) and "confirmation" in res_val:
+                    reply = res_val["confirmation"]
+                elif isinstance(res_val, dict) and "message" in res_val:
+                    reply = f"Done, Sir. {res_val['message']}"
+                else:
+                    reply = f"I've executed {tool_name}. Result: {json.dumps(res_val)[:300]}"
+
+                conversation_manager.add_tool_interaction(tool_name, tool_args, res_val)
+                conversation_manager.add_assistant_message(reply)
+
+                return {
+                    "text": reply,
+                    "tool_called": tool_name,
+                    "tool_args": tool_args,
+                    "tool_result": res_val,
+                    "status": "success",
+                    "requires_confirmation": False,
+                    "provider": f"ollama ({self.ollama_model})"
+                }
+
+            # Plain text response from Ollama
+            reply = msg_obj.get("content", "").strip() or "Standing by, Sir."
+            conversation_manager.add_assistant_message(reply)
+            return {
+                "text": reply,
+                "tool_called": None,
+                "status": "success",
+                "requires_confirmation": False,
+                "provider": f"ollama ({self.ollama_model})"
+            }
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.warning(f"Ollama server not reachable at {self.ollama_url} ({e}). Seamlessly falling back to local engine.")
+            return None
+        except Exception as e:
+            logger.error(f"Ollama request error: {e}. Falling back to local engine.")
+            return None
 
     def _process_with_gemini(self, user_text: str, conversation_manager) -> Dict[str, Any]:
         from google.genai import types

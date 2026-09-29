@@ -138,11 +138,15 @@ class JarvisAgent:
                 "prompt_message": pending.prompt_message
             }
 
+        llm_info = self.llm.get_status_info()
         return {
             "assistant_name": self.name,
             "user_name": self.user_name,
+            "llm_info": llm_info,
+            "provider": llm_info["provider"],
+            "active_label": llm_info["active_label"],
             "gemini_active": self.llm.is_gemini_active(),
-            "model_name": self.llm.model_name,
+            "model_name": self.llm.ollama_model if self.llm.provider == "ollama" else self.llm.model_name,
             "system_status": sys_info,
             "reminders": reminders_data,
             "calendar_events": calendar_data,

@@ -57,6 +57,46 @@ class ToolDefinition:
             }
         }
 
+    def to_ollama_declaration(self) -> Dict[str, Any]:
+        """Convert tool to Ollama / OpenAI function declaration schema."""
+        properties = {}
+        required = []
+
+        for param_name, param_info in self.parameters.items():
+            param_type = param_info.get("type", "string").lower()
+            if param_type in ("int", "integer"):
+                param_type = "integer"
+            elif param_type in ("float", "number"):
+                param_type = "number"
+            elif param_type in ("bool", "boolean"):
+                param_type = "boolean"
+            elif param_type in ("dict", "object"):
+                param_type = "object"
+            elif param_type in ("list", "array"):
+                param_type = "array"
+            else:
+                param_type = "string"
+
+            properties[param_name] = {
+                "type": param_type,
+                "description": param_info.get("description", "")
+            }
+            if param_info.get("required", False):
+                required.append(param_name)
+
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required
+                }
+            }
+        }
+
 
 class ToolRegistry:
     def __init__(self):
@@ -100,6 +140,9 @@ class ToolRegistry:
 
     def get_gemini_declarations(self) -> List[Dict[str, Any]]:
         return [tool.to_gemini_declaration() for tool in self._tools.values()]
+
+    def get_ollama_declarations(self) -> List[Dict[str, Any]]:
+        return [tool.to_ollama_declaration() for tool in self._tools.values()]
 
     def execute(self, name: str, **kwargs) -> Dict[str, Any]:
         """Execute a registered tool by name with arguments."""

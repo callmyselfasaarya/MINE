@@ -42,9 +42,9 @@ def get_memory_context_prompt() -> str:
 
 @register_tool(
     name="remember_fact",
-    description="Save a useful fact, user preference, detail, or note to long-term memory.",
+    description="Save a useful fact, user preference, personal detail, or note to long-term memory. Always use this whenever the user says 'remember that...', 'remember my...', or tells you their preferences or details.",
     parameters={
-        "topic_or_key": {"type": "string", "description": "Subject or key (e.g., 'favorite_beverage', 'project_deadline', 'girlfriend_birthday')", "required": True},
+        "topic_or_key": {"type": "string", "description": "Subject or key (e.g., 'coffee_preference', 'favorite_beverage', 'project_deadline', 'birthday')", "required": True},
         "information": {"type": "string", "description": "The exact fact or information to remember", "required": True},
         "category": {"type": "string", "description": "Category (e.g., 'preference', 'personal', 'work', 'project')", "required": False}
     }
