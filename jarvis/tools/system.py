@@ -15,20 +15,70 @@ logger = logging.getLogger(__name__)
 
 # Common app shortcuts for Windows
 KNOWN_APPS = {
+    # System utilities
     "calculator": "calc.exe",
     "calc": "calc.exe",
     "notepad": "notepad.exe",
-    "browser": "https://www.google.com",
-    "chrome": "chrome",
-    "edge": "msedge",
+    "paint": "mspaint.exe",
     "terminal": "powershell.exe",
+    "powershell": "powershell.exe",
     "cmd": "cmd.exe",
+    "command prompt": "cmd.exe",
     "explorer": "explorer.exe",
+    "file explorer": "explorer.exe",
     "task manager": "taskmgr.exe",
     "taskmgr": "taskmgr.exe",
+    "control panel": "control.exe",
+    "settings": "ms-settings:",
+    "snipping tool": "snippingtool.exe",
+    "wordpad": "write.exe",
+    "clock": "ms-clock:",
+    "calendar": "outlookcal:",
+    # Browsers
+    "browser": "https://www.google.com",
+    "chrome": "chrome",
+    "google chrome": "chrome",
+    "edge": "msedge",
+    "microsoft edge": "msedge",
+    "firefox": "firefox",
+    "opera": "opera",
+    "brave": "brave",
+    # Dev tools
     "vscode": "code",
     "code": "code",
-    "paint": "mspaint.exe"
+    "visual studio code": "code",
+    "notepad++": "notepad++",
+    "git bash": "git-bash",
+    # Media
+    "vlc": "vlc",
+    "vlc media player": "vlc",
+    "winamp": "winamp",
+    "windows media player": "wmplayer.exe",
+    "media player": "wmplayer.exe",
+    "groove music": "mswindowsmusic:",
+    # Communication
+    "discord": "discord",
+    "telegram": "telegram",
+    "whatsapp": "whatsapp",
+    "skype": "skype",
+    "zoom": "zoom",
+    "teams": "teams",
+    "microsoft teams": "teams",
+    "slack": "slack",
+    # Productivity (Microsoft Office)
+    "word": "winword.exe",
+    "microsoft word": "winword.exe",
+    "excel": "excel.exe",
+    "microsoft excel": "excel.exe",
+    "powerpoint": "powerpnt.exe",
+    "microsoft powerpoint": "powerpnt.exe",
+    "outlook": "outlook.exe",
+    "microsoft outlook": "outlook.exe",
+    # Gaming & streaming
+    "steam": "steam",
+    "obs": "obs64.exe",
+    "obs studio": "obs64.exe",
+    "spotify": "spotify",
 }
 
 

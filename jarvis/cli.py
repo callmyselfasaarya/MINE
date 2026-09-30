@@ -51,7 +51,17 @@ def run_cli():
     print_status_table()
 
     console.print("\n[dim]Commands: [bold]/mic[/bold] to listen via microphone, [bold]/status[/bold] for vitals, [bold]/exit[/bold] to quit.[/dim]\n")
-    speak(f"Greetings, {USER_NAME}. {ASSISTANT_NAME} Version 1 MVP is online and standing by.")
+
+    # Time-aware greeting on startup
+    from jarvis.tools.entertainment import greet_user
+    greeting_data = greet_user()
+    greeting_msg = greeting_data.get("message", f"Greetings, {USER_NAME}. {ASSISTANT_NAME} is online and standing by.")
+    console.print(Panel(
+        Text(greeting_msg, style="bold white"),
+        title=f"[bold cyan]{ASSISTANT_NAME}[/bold cyan]",
+        border_style="cyan"
+    ))
+    speak(greeting_msg)
 
     while True:
         try:

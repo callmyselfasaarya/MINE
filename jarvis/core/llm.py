@@ -47,10 +47,102 @@ class LocalIntentEngine:
         clean = text.strip()
         lower = clean.lower()
 
-        # 1. Reminders
-        # e.g.: "Jarvis, remind me tomorrow at 8 AM to submit my project"
-        # e.g.: "remind me in 10 minutes to call Sarah"
-        # e.g.: "set a reminder to buy groceries tomorrow at 5 PM"
+        # ── 0. Greeting ──────────────────────────────────────────────────────
+        if any(p in lower for p in [
+            "good morning", "good afternoon", "good evening", "good night",
+            "greet me", "say hello", "introduce yourself"
+        ]):
+            return "greet_user", {}
+
+        # Standalone greetings (only if very short)
+        if lower.strip().rstrip("!").rstrip(".") in (
+            "hi", "hello", "hey", "hola", "howdy", "hey mine", "hi mine",
+            "hello mine", "hey jarvis", "hello jarvis", "hi jarvis", "greetings"
+        ):
+            return "greet_user", {}
+
+        # ── 1. Time & Date ───────────────────────────────────────────────────
+        # (handled in conversational fallback, no dedicated tool needed)
+
+        # ── 2. Jokes ─────────────────────────────────────────────────────────
+        if any(p in lower for p in [
+            "tell me a joke", "say a joke", "tell a joke", "joke please",
+            "make me laugh", "say something funny", "tell something funny",
+            "give me a joke", "crack a joke", "funny joke"
+        ]):
+            return "tell_joke", {}
+
+        # ── 3. Play Music ────────────────────────────────────────────────────
+        # "play music", "play some music", "play [song name]", "open spotify"
+        play_music_match = re.search(
+            r"(?:play|start|listen to|put on)\s+(?:some\s+)?(?:music|song|songs|tracks?)?(?:\s+by|\s+from|\s+called)?\s*(.*)$",
+            lower
+        )
+        if play_music_match and any(p in lower for p in [
+            "play music", "play song", "play songs", "play track", "listen to music",
+            "put on music", "start music", "play some", "shuffle music"
+        ]):
+            q = play_music_match.group(1).strip()
+            return "play_music", {"query": q}
+
+        # "play [song/artist name]"
+        specific_song_match = re.search(r"^(?:play|listen to|put on)\s+(.+)$", lower)
+        if specific_song_match and not any(p in lower for p in [
+            "play music", "play video", "play game"
+        ]):
+            song_q = specific_song_match.group(1).strip()
+            # Make sure it's not already caught by app/website patterns
+            if len(song_q) > 2:
+                return "play_music", {"query": song_q}
+
+        if "spotify" in lower:
+            return "play_music", {"query": "spotify", "source": "spotify"}
+
+        if "youtube music" in lower:
+            return "play_music", {"query": "", "source": "youtube"}
+
+        # ── 4. Open Website ──────────────────────────────────────────────────
+        # "open youtube.com", "go to reddit.com", "open https://..."
+        website_match = re.search(
+            r"(?:open|go to|visit|navigate to|browse to)\s+((?:https?://)?[\w\-]+(?:\.[a-z]{2,})+(?:/[^\s]*)?)\b",
+            lower
+        )
+        if website_match:
+            url_candidate = website_match.group(1).strip()
+            # If it contains a dot and looks like a URL, open as website
+            if "." in url_candidate and not url_candidate.endswith("."):
+                return "open_website", {"url": url_candidate}
+
+        # ── 5. Google Search ─────────────────────────────────────────────────
+        google_match = re.search(
+            r"(?:search(?:\s+on)?\s+google\s+(?:for)?|google(?:\s+for)?|google\s+search(?:\s+for)?)\s+(.+)",
+            lower
+        )
+        if google_match:
+            q = google_match.group(1).strip()
+            return "search_google", {"query": q}
+
+        # ── 6. Screenshot with optional custom filename ───────────────────────
+        screenshot_match = re.search(
+            r"(?:take\s+a?\s*screenshot|capture\s+(?:the\s+)?screen|screenshot)(?:\s+(?:and\s+)?(?:save\s+(?:it\s+)?(?:as|with\s+name|named?|called?)?|name\s+it|filename?)\s+([\w\-\.]+))?[\s.]*$",
+            lower
+        )
+        if screenshot_match:
+            fname = screenshot_match.group(1)
+            if fname:
+                return "take_screenshot", {"filename": fname}
+            return "take_screenshot", {}
+
+        # ── 7. Save Note ──────────────────────────────────────────────────────
+        note_match = re.search(
+            r"(?:take\s+(?:a\s+)?(?:note|notes?)|save\s+(?:a\s+)?(?:note|notes?)|note\s+(?:this\s+)?(?:down)?|write\s+(?:a\s+)?note|add\s+(?:a\s+)?note|remember\s+(?:to\s+note)|jot\s+down)(?:\s+(?:that|:)?\s*)(.+)",
+            lower
+        )
+        if note_match:
+            note_text = note_match.group(1).strip()
+            return "save_note", {"note": note_text}
+
+        # ── 8. Reminders ──────────────────────────────────────────────────────
         remind_match = re.search(
             r"remind\s+(?:me\s+)?(?:(tomorrow\s+at\s+[^to]+|today\s+at\s+[^to]+|in\s+\d+\s*(?:mins?|minutes?|hours?|secs?)|at\s+\d+(?::\d+)?\s*(?:am|pm)?)\s+)?(?:to\s+)?(.+)",
             lower,
@@ -60,7 +152,6 @@ class LocalIntentEngine:
             time_part = remind_match.group(1)
             task_part = remind_match.group(2)
 
-            # Check if time is at the end: "remind me to [task] [time]"
             if not time_part:
                 end_time_match = re.search(
                     r"(.+?)\s+(tomorrow(?:\s+at\s+[^$]+)?|in\s+\d+\s*(?:mins?|minutes?|hours?)|at\s+\d+(?::\d+)?\s*(?:am|pm)?)$",
@@ -72,14 +163,13 @@ class LocalIntentEngine:
                 else:
                     time_part = "in 1 hour"
 
-            # Clean task part
             task_part = re.sub(r"^(to\s+)", "", task_part).strip()
             return "create_reminder", {"title": task_part, "due_time": time_part}
 
         if any(p in lower for p in ["list reminders", "show reminders", "what are my reminders", "pending reminders"]):
             return "list_reminders", {"include_completed": False}
 
-        # 2. Memory
+        # ── 9. Memory ─────────────────────────────────────────────────────────
         if any(p in lower for p in ["what do you remember", "list memories", "recall memories", "show memory", "do you remember"]):
             q = ""
             for p in ["what do you remember about", "do you remember", "recall memories about"]:
@@ -87,7 +177,6 @@ class LocalIntentEngine:
                     q = lower.split(p)[-1].strip().rstrip("?")
             return "recall_facts", {"query": q}
 
-        # "remember that my car is blue", "remember my favorite food is sushi"
         mem_match = re.search(r"remember\s+(?:that\s+)?(?:my\s+)?([^is]+?)\s+is\s+(.+)", lower)
         if mem_match:
             topic = mem_match.group(1).strip()
@@ -99,42 +188,62 @@ class LocalIntentEngine:
             info = mem_match2.group(1).strip()
             return "remember_fact", {"topic_or_key": "general_note", "information": info, "category": "notes"}
 
-        # 3. System actions & Telemetry
-        if any(p in lower for p in ["system status", "computer status", "system stats", "battery level", "cpu usage", "ram usage", "how is my pc", "how's my computer"]):
+        # ── 10. System Status ─────────────────────────────────────────────────
+        if any(p in lower for p in ["system status", "computer status", "system stats", "battery level",
+                                      "cpu usage", "ram usage", "how is my pc", "how's my computer",
+                                      "pc health", "check system"]):
             return "get_system_status", {}
 
-        if any(p in lower for p in ["take a screenshot", "capture screen", "screenshot"]):
-            return "take_screenshot", {}
-
-        open_app_match = re.search(r"(?:open|launch|start)\s+(?:the\s+)?(calculator|notepad|chrome|edge|browser|terminal|cmd|task manager|taskmgr|vscode|code|paint)", lower)
+        # ── 11. Open Application ──────────────────────────────────────────────
+        open_app_match = re.search(
+            r"(?:open|launch|start)\s+(?:the\s+)?("
+            r"calculator|notepad|chrome|edge|firefox|browser|terminal|cmd|powershell|"
+            r"task manager|taskmgr|vscode|code|paint|word|excel|powerpoint|outlook|"
+            r"file explorer|explorer|control panel|settings|discord|telegram|whatsapp|"
+            r"steam|obs|vlc|winamp|spotify|skype|zoom|teams"
+            r")",
+            lower
+        )
         if open_app_match:
             app = open_app_match.group(1)
             return "open_application", {"app_name": app}
 
-        # Media controls
-        if "mute" in lower:
+        # ── 12. Media Controls ────────────────────────────────────────────────
+        if any(p in lower for p in ["mute", "mute audio", "mute sound"]):
             return "control_media", {"action": "mute"}
-        if "volume up" in lower:
+        if any(p in lower for p in ["volume up", "increase volume", "louder"]):
             return "control_media", {"action": "volumeup"}
-        if "volume down" in lower:
+        if any(p in lower for p in ["volume down", "decrease volume", "quieter", "lower volume"]):
             return "control_media", {"action": "volumedown"}
-        if any(p in lower for p in ["pause music", "pause video", "play music", "play video", "resume playback"]):
+        if any(p in lower for p in ["next song", "next track", "skip song", "skip track"]):
+            return "control_media", {"action": "next"}
+        if any(p in lower for p in ["previous song", "previous track", "prev song", "go back"]):
+            return "control_media", {"action": "prev"}
+        if any(p in lower for p in ["pause", "resume playback", "pause music", "pause video",
+                                      "stop music", "stop video"]):
             return "control_media", {"action": "playpause"}
 
-        # 4. Search & Wikipedia
-        search_match = re.search(r"(?:search\s+(?:the\s+web\s+for|for|google|ddg)?|lookup|look\s+up)\s+(.+)", lower)
+        # ── 13. Web Search (DuckDuckGo) ───────────────────────────────────────
+        search_match = re.search(
+            r"(?:search\s+(?:the\s+(?:web|internet)\s+for|for|ddg)?|lookup|look\s+up|find\s+(?:info\s+(?:on|about))?|web\s+search(?:\s+for)?)\s+(.+)",
+            lower
+        )
         if search_match:
             q = search_match.group(1).strip()
             return "search_web", {"query": q}
 
-        wiki_match = re.search(r"(?:who is|what is|tell me about|wikipedia)\s+(.+)", lower)
+        # ── 14. Wikipedia ─────────────────────────────────────────────────────
+        wiki_match = re.search(r"(?:who is|what is|tell me about|wikipedia(?:\s+about)?)\s+(.+)", lower)
         if wiki_match:
             topic = wiki_match.group(1).strip().rstrip("?")
-            if not any(k in topic for k in ["you", "your name", "the time", "today"]):
+            if not any(k in topic for k in ["you", "your name", "the time", "today", "mine"]):
                 return "get_wikipedia_summary", {"topic": topic}
 
-        # 5. Documents & Files
-        doc_create_match = re.search(r"(?:create|write|make)\s+(?:a\s+)?(?:document|file|note)\s+(?:called|named\s+)?([a-zA-Z0-9_\-\.]+)\s+(?:with\s+content\s+|containing\s+)?(.+)", clean, re.IGNORECASE)
+        # ── 15. Documents & Files ─────────────────────────────────────────────
+        doc_create_match = re.search(
+            r"(?:create|write|make)\s+(?:a\s+)?(?:document|file|note)\s+(?:called|named\s+)?([a-zA-Z0-9_\-\.]+)\s+(?:with\s+content\s+|containing\s+)?(.+)",
+            clean, re.IGNORECASE
+        )
         if doc_create_match:
             fname = doc_create_match.group(1).strip()
             content = doc_create_match.group(2).strip()
@@ -150,8 +259,11 @@ class LocalIntentEngine:
         if any(p in lower for p in ["list files", "show my files", "my documents", "list documents"]):
             return "list_files", {"directory": ""}
 
-        # 6. Calendar
-        cal_add_match = re.search(r"(?:schedule|add\s+(?:to\s+)?calendar|set\s+meeting)\s+(.+?)\s+(?:on|for)\s+([a-zA-Z0-9\s\-]+?)\s+at\s+([0-9:\sAPMapm]+)", lower)
+        # ── 16. Calendar ──────────────────────────────────────────────────────
+        cal_add_match = re.search(
+            r"(?:schedule|add\s+(?:to\s+)?calendar|set\s+meeting)\s+(.+?)\s+(?:on|for)\s+([a-zA-Z0-9\s\-]+?)\s+at\s+([0-9:\sAPMapm]+)",
+            lower
+        )
         if cal_add_match:
             title = cal_add_match.group(1)
             date_s = cal_add_match.group(2)
@@ -161,7 +273,7 @@ class LocalIntentEngine:
         if any(p in lower for p in ["calendar", "what's on my calendar", "upcoming events", "my schedule"]):
             return "list_calendar_events", {}
 
-        # 7. Dangerous Actions (Testing confirmations)
+        # ── 17. Dangerous Actions ─────────────────────────────────────────────
         del_file_match = re.search(r"(?:delete|remove)\s+(?:the\s+)?(?:file|document)\s+([a-zA-Z0-9_\-\.\/\\]+)", lower)
         if del_file_match:
             f = del_file_match.group(1)
@@ -540,21 +652,62 @@ class LLMClient:
         parsed = self.local_engine.parse(user_text)
 
         if not parsed:
-            # Polite conversational response
+            from datetime import datetime
             lower = user_text.lower()
-            if any(h in lower for h in ["hello", "hi", "hey", "mine", "jarvis"]):
-                reply = f"Greetings, {USER_NAME}. I am online and at your service. How may I assist you today?"
-            elif any(w in lower for w in ["who are you", "what are you"]):
-                reply = f"I am {ASSISTANT_NAME}, your personal desktop assistant. Version 1 MVP is active."
-            elif any(t in lower for t in ["what time is it", "current time", "what is the time"]):
-                from datetime import datetime
-                reply = f"The time is currently {datetime.now().strftime('%I:%M %p')}."
-            elif any(d in lower for d in ["what date is it", "today's date", "what day is it"]):
-                from datetime import datetime
-                reply = f"Today is {datetime.now().strftime('%A, %B %d, %Y')}."
-            else:
-                reply = f"I heard you, {USER_NAME}: \"{user_text}\". You can ask me to set reminders, search the web, manage calendar, check system stats, or create documents."
+            now = datetime.now()
 
+            # ── Handle built-in conversational shortcuts first ──────────────────
+            if any(w in lower for w in ["who are you", "what are you", "what's your name", "your name"]):
+                reply = (
+                    f"I am {ASSISTANT_NAME}, your personal AI desktop assistant. "
+                    f"I can open apps, search the web, play music, tell jokes, "
+                    f"take notes, manage reminders, check system stats, and much more."
+                )
+                conversation_manager.add_assistant_message(reply)
+                return {"text": reply, "tool_called": None, "status": "success",
+                        "requires_confirmation": False, "provider": "local_intent"}
+
+            elif any(t in lower for t in [
+                "what time is it", "current time", "what is the time",
+                "what's the time", "tell me the time", "time please"
+            ]):
+                reply = f"The current time is {now.strftime('%I:%M %p')}, {USER_NAME}."
+                conversation_manager.add_assistant_message(reply)
+                return {"text": reply, "tool_called": None, "status": "success",
+                        "requires_confirmation": False, "provider": "local_intent"}
+
+            elif any(d in lower for d in [
+                "what date is it", "today's date", "what day is it",
+                "what is today", "what's today", "current date"
+            ]):
+                reply = f"Today is {now.strftime('%A, %B %d, %Y')}, {USER_NAME}."
+                conversation_manager.add_assistant_message(reply)
+                return {"text": reply, "tool_called": None, "status": "success",
+                        "requires_confirmation": False, "provider": "local_intent"}
+
+            elif any(dt in lower for dt in ["date and time", "time and date"]):
+                reply = f"It is {now.strftime('%A, %B %d, %Y')} and the time is {now.strftime('%I:%M %p')}, {USER_NAME}."
+                conversation_manager.add_assistant_message(reply)
+                return {"text": reply, "tool_called": None, "status": "success",
+                        "requires_confirmation": False, "provider": "local_intent"}
+
+            # ── Out-of-context: try Ollama for a free-form conversational answer ─
+            if self.is_ollama_active():
+                logger.info(f"Local intent engine returned None. Routing to Ollama for conversational answer: '{user_text}'")
+                ollama_result = self._process_with_ollama(user_text, conversation_manager)
+                if ollama_result:
+                    # Tag it clearly so the CLI/HUD can show the Ollama label
+                    ollama_result["provider"] = f"ollama ({self.ollama_model}) [conversational]"
+                    return ollama_result
+
+            # ── Last resort: offline generic reply ──────────────────────────────
+            reply = (
+                f"I heard you, {USER_NAME}: \"{user_text}\". "
+                f"I can help you: greet you, tell the time/date, open apps & websites, "
+                f"search Google/Wikipedia, play music, take notes, screenshot, tell jokes, "
+                f"set reminders, and manage your calendar. "
+                f"For general questions, make sure Ollama is running (`ollama serve`)."
+            )
             conversation_manager.add_assistant_message(reply)
             return {
                 "text": reply,
@@ -586,10 +739,20 @@ class LLMClient:
         exec_result = registry.execute(tool_name, **args)
         res_val = exec_result.get("result")
 
-        # Natural formatting for the specific user example:
-        # You: "Jarvis, remind me tomorrow at 8 AM to submit my project."
-        # JARVIS: "Done. I've set a reminder for tomorrow at 8 AM."
-        if tool_name == "create_reminder" and isinstance(res_val, dict):
+        # Natural language formatting per tool
+        if tool_name == "greet_user" and isinstance(res_val, dict):
+            reply = res_val.get("message", "Hello! How may I assist you?")
+        elif tool_name == "tell_joke" and isinstance(res_val, dict):
+            reply = f"{res_val.get('setup', '')} ... {res_val.get('punchline', '')}"
+        elif tool_name == "play_music" and isinstance(res_val, dict):
+            reply = res_val.get("message", "Playing music for you, Sir.")
+        elif tool_name == "open_website" and isinstance(res_val, dict):
+            reply = res_val.get("message", "Opened the website, Sir.")
+        elif tool_name == "search_google" and isinstance(res_val, dict):
+            reply = res_val.get("message", "Opened Google search, Sir.")
+        elif tool_name == "save_note" and isinstance(res_val, dict):
+            reply = res_val.get("message", "Note saved successfully, Sir.")
+        elif tool_name == "create_reminder" and isinstance(res_val, dict):
             reply = res_val.get("confirmation", f"Done. I've set a reminder for {args.get('title')} at {args.get('due_time')}.")
         elif tool_name == "create_calendar_event" and isinstance(res_val, dict):
             reply = res_val.get("message", "Done. I've scheduled the event on your calendar.")
@@ -602,6 +765,8 @@ class LLMClient:
             reply = f"Here is what I found for '{args.get('query')}': {top.get('snippet', top.get('title', ''))}"
         elif tool_name == "get_wikipedia_summary" and isinstance(res_val, dict):
             reply = res_val.get("summary", "No summary found.")
+        elif tool_name == "take_screenshot" and isinstance(res_val, dict):
+            reply = f"Screenshot saved as '{res_val.get('filename', 'screenshot')}', Sir."
         elif isinstance(res_val, dict) and "message" in res_val:
             reply = f"Done, Sir. {res_val['message']}"
         else:

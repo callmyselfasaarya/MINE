@@ -1,33 +1,13 @@
 [
   {
-    "id": "61a2bec8",
-    "title": "water the plant",
-    "due_timestamp": "2026-09-30T07:00:23.947828",
-    "due_human": "Wednesday, Sep 30 at 07:00 AM",
-    "note": "",
-    "created_at": "2026-09-29T21:28:23.948327",
-    "completed": false,
-    "triggered": false
-  },
-  {
-    "id": "e4eb740d",
-    "title": "submit my project.",
-    "due_timestamp": "2026-09-30T08:00:00",
-    "due_human": "Wednesday, Sep 30 at 08:00 AM",
-    "note": "",
-    "created_at": "2026-09-29T21:37:39.215428",
-    "completed": false,
-    "triggered": false
-  },
-  {
     "id": "9b965e42",
     "title": "submit my project.",
     "due_timestamp": "2026-09-30T08:00:00",
     "due_human": "Wednesday, Sep 30 at 08:00 AM",
     "note": "",
     "created_at": "2026-09-29T21:56:14.278641",
-    "completed": false,
-    "triggered": false
+    "completed": true,
+    "triggered": true
   },
   {
     "id": "5faefd18",
@@ -36,8 +16,8 @@
     "due_human": "Wednesday, Sep 30 at 08:00 AM",
     "note": "Project submission deadline",
     "created_at": "2026-09-29T21:59:01.960425",
-    "completed": false,
-    "triggered": false
+    "completed": true,
+    "triggered": true
   },
   {
     "id": "02ebd8e8",
@@ -46,18 +26,8 @@
     "due_human": "Wednesday, Sep 30 at 08:00 AM",
     "note": "",
     "created_at": "2026-09-29T22:01:27.251840",
-    "completed": false,
-    "triggered": false
-  },
-  {
-    "id": "a3766fa5",
-    "title": "Black coffee reminder",
-    "due_timestamp": "2026-09-29T22:31:30.505649",
-    "due_human": "Tuesday, Sep 29 at 10:31 PM",
-    "note": "",
-    "created_at": "2026-09-29T22:01:30.506010",
-    "completed": false,
-    "triggered": false
+    "completed": true,
+    "triggered": true
   },
   {
     "id": "dd9413b0",
@@ -66,7 +36,7 @@
     "due_human": "Wednesday, Sep 30 at 08:00 AM",
     "note": "",
     "created_at": "2026-09-29T22:02:44.054661",
-    "completed": false,
-    "triggered": false
+    "completed": true,
+    "triggered": true
   }
 ]

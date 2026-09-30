@@ -1,15 +1,5 @@
 [
   {
-    "id": "e9c9494b",
-    "title": "quarterly project review",
-    "date": "2026-10-05",
-    "time": "02:00 PM",
-    "datetime_iso": "2026-10-05T14:00:15.153700",
-    "duration_minutes": 60,
-    "description": "",
-    "created_at": "2026-09-29T20:59:15.154895"
-  },
-  {
     "id": "b4970213",
     "title": "quarterly project review",
     "date": "2026-10-05",
@@ -20,16 +10,6 @@
     "created_at": "2026-09-29T20:59:45.239519"
   },
   {
-    "id": "16f641f8",
-    "title": "quarterly project review",
-    "date": "2026-10-05",
-    "time": "02:00 PM",
-    "datetime_iso": "2026-10-05T14:00:12.715067",
-    "duration_minutes": 60,
-    "description": "",
-    "created_at": "2026-09-29T21:00:12.715403"
-  },
-  {
     "id": "d8d58532",
     "title": "quarterly project review",
     "date": "2026-10-05",
@@ -38,26 +18,6 @@
     "duration_minutes": 60,
     "description": "",
     "created_at": "2026-09-29T21:37:39.218795"
-  },
-  {
-    "id": "34b112db",
-    "title": "Quarterly Project Review",
-    "date": "2026-10-05",
-    "time": "02:00 PM",
-    "datetime_iso": "2026-10-05T14:00:09.383713",
-    "duration_minutes": "0",
-    "description": "Quarterly project review",
-    "created_at": "2026-09-29T21:59:09.385208"
-  },
-  {
-    "id": "c36ac0b7",
-    "title": "Quarterly Project Review",
-    "date": "2026-10-05",
-    "time": "02:00 PM",
-    "datetime_iso": "2026-10-05T14:00:33.644732",
-    "duration_minutes": "0",
-    "description": "",
-    "created_at": "2026-09-29T22:01:33.645245"
   },
   {
     "id": "56572e44",

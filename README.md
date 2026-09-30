@@ -58,28 +58,92 @@ pip install -r requirements.txt
 
 ### 2. Configure LLM Provider (Ollama or Gemini)
 
-**Option 1: Ollama Local LLM (Default & Recommended for 100% Privacy)**
-MINE natively integrates with [Ollama](https://ollama.com/) for entirely local, private, and offline-capable intelligence:
-```bash
-# Pull and start the default Llama 3.2 model
-ollama run llama3.2
+MINE uses a **smart two-pass pipeline** for every input:
+
 ```
-In your `.env`:
+User Input
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Local Intent Engine (instant)  │  ◄── Tool commands (greet, open app,
+│  Pattern-matched, zero latency  │       search, reminders, notes, etc.)
+└────────────────┬────────────────┘
+                 │ No intent matched (out-of-context question)
+                 ▼
+┌─────────────────────────────────┐
+│  Ollama / Gemini  (conversational)  │  ◄── General knowledge, reasoning,
+│  Full LLM for free-form replies     │       coding help, explanations, etc.
+└─────────────────────────────────┘
+```
+
+This means **tool commands are always instant** (no LLM needed), while **any question Ollama doesn't recognize** gets answered naturally by the local LLM.
+
+---
+
+**Option 1: Ollama Local LLM (Default & Recommended for 100% Privacy)**
+
+MINE integrates with [Ollama](https://ollama.com/) for entirely local, private, and offline-capable intelligence.
+
+**Step 1 — Install Ollama:**
+```bash
+# Download from https://ollama.com/download (Windows installer available)
+# Or via winget:
+winget install Ollama.Ollama
+```
+
+**Step 2 — Pull a model:**
+```bash
+# Default model (recommended, fast, good quality)
+ollama pull llama3.2
+
+# Alternatives (pick based on your VRAM):
+ollama pull llama3.1        # Larger, smarter
+ollama pull mistral         # Fast and capable
+ollama pull phi3            # Lightweight for low-end machines
+ollama pull gemma2          # Google's open model
+```
+
+**Step 3 — Start Ollama daemon:**
+```bash
+ollama serve
+# Ollama runs at http://localhost:11434 by default
+```
+
+**Step 4 — Configure `.env`:**
 ```env
 LLM_PROVIDER=ollama
+OLLAMA_HOST=http://localhost:11434
 OLLAMA_URL=http://localhost:11434/api/chat
 OLLAMA_MODEL=llama3.2
+OLLAMA_TIMEOUT=25
 ```
-MINE communicates via:
-$$\text{User} \longrightarrow \text{Python Assistant} \longrightarrow \text{Ollama} \longrightarrow \text{Local LLM} \longrightarrow \text{Assistant} \longrightarrow \text{User}$$
+
+**How out-of-context questions are handled:**
+
+When you ask something MINE's intent engine doesn't recognize (e.g. *"Explain black holes"*, *"Write me a poem"*, *"What is the capital of France?"*), it automatically routes to Ollama:
+
+```
+You:   "What is the speed of light?"
+MINE:  [Local engine: no intent match]
+       [Routing to Ollama (llama3.2) for conversational answer...]
+MINE:  "The speed of light in a vacuum is approximately 299,792,458
+        metres per second (about 3×10⁸ m/s), often denoted as 'c'."
+```
+
+If Ollama is offline, MINE gracefully falls back with a helpful offline message.
+
+---
 
 **Option 2: Google Gemini (Cloud Reasoning)**
+
 Add your free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) in `.env`:
 ```env
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
 ```
+
+> **Tip:** You can run both — set `LLM_PROVIDER=ollama` and also add a `GEMINI_API_KEY`. MINE will use Ollama first, falling back to Gemini, then the local engine.
 
 > *Note: If Ollama or Gemini are offline or unconfigured, MINE automatically falls back to its built-in rule-based Local Intent Engine with zero downtime.*
 
@@ -131,7 +195,8 @@ M.I.N.E/
 │   ├── cli.py                  # Rich terminal CLI interface
 │   ├── core/
 │   │   ├── agent.py            # Central orchestrator (STT -> LLM -> Tools -> TTS)
-│   │   ├── llm.py              # Gemini client + Local Intent engine
+│   │   ├── llm.py              # Gemini/Ollama client + Local Intent engine
+│   │   │                       # └─ Out-of-context queries → Ollama conversational fallback
 │   │   ├── conversation.py     # Conversation context buffer
 │   │   ├── memory.py           # Long-term memory store & context prompt injector
 │   │   └── guardrails.py       # Two-step confirmation safety system
@@ -139,12 +204,14 @@ M.I.N.E/
 │   │   ├── stt.py              # Speech-to-Text recognizer
 │   │   └── tts.py              # Text-to-Speech synthesizer
 │   ├── tools/
-│   │   ├── registry.py         # Tool registry and Gemini schema generator
+│   │   ├── registry.py         # Tool registry and Gemini/Ollama schema generator
 │   │   ├── search.py           # DuckDuckGo and Wikipedia search
 │   │   ├── files.py            # File reading, listing, and document creation
 │   │   ├── reminders.py        # Reminder service + background daemon
 │   │   ├── calendar.py         # Calendar event management
-│   │   └── system.py           # Hardware vitals, app launcher, screenshots, power
+│   │   ├── system.py           # Hardware vitals, app launcher, screenshots, power
+│   │   └── entertainment.py    # Jokes, music playback, website opener, Google search,
+│   │                           # save notes, time-aware greeting (greet_user)
 │   └── web/
 │       ├── server.py           # FastAPI app & WebSockets
 │       └── static/
@@ -155,27 +222,9 @@ M.I.N.E/
 │               └── visualizer.js # Canvas audio waveform visualizer
 └── data/
     ├── documents/              # Created user documents and notes
+    │   └── important_notes.txt # Timestamped notes saved via "take a note"
+    ├── screenshots/            # Screenshots saved via "take a screenshot"
     ├── reminders.json          # Persistent reminders
     ├── calendar.json           # Scheduled calendar events
     └── memory.json             # Remembered user facts
-```
-
----
-
-## 🔐 Safety & Guardrails Example
-
-When a dangerous action is commanded (e.g., deleting a file or executing a system command):
-
-```
-User: "Delete the file sprint_goals.txt"
-MINE: "I require your confirmation to permanently delete 'sprint_goals.txt'. Shall I proceed?"
-Status: PENDING_CONFIRMATION
-
-User: "No, cancel that."
-MINE: "Action cancelled. Safe state restored, Sir."
-
-User: "Delete the file sprint_goals.txt"
-MINE: "I require your confirmation to permanently delete 'sprint_goals.txt'. Shall I proceed?"
-User: "Yes, proceed."
-MINE: "Action authorized, Sir. File 'sprint_goals.txt' has been permanently deleted."
 ```
