@@ -63,10 +63,10 @@ User Input
 └────────────────┬────────────────┘
                  │ No intent matched (out-of-context question)
                  ▼
-┌─────────────────────────────────┐
+┌─────────────────────────────────────┐
 │  Ollama / Gemini  (conversational)  │  ◄── General knowledge, reasoning,
 │  Full LLM for free-form replies     │       coding help, explanations, etc.
-└─────────────────────────────────┘
+└─────────────────────────────────────┘
 ```
 
 This means **tool commands are always instant** (no LLM needed), while **any question Ollama doesn't recognize** gets answered naturally by the local LLM.
