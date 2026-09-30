@@ -39,6 +39,13 @@ TTS_VOLUME = float(os.getenv("TTS_VOLUME", "1.0"))
 STT_ENERGY_THRESHOLD = int(os.getenv("STT_ENERGY_THRESHOLD", "300"))
 STT_PAUSE_THRESHOLD = float(os.getenv("STT_PAUSE_THRESHOLD", "0.8"))
 
+# Wake Word Configuration
+WAKE_WORD = os.getenv("WAKE_WORD", "hey mine").lower().strip()
+WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() in ("true", "1", "yes")
+# Extra wake phrases accepted in addition to WAKE_WORD (comma-separated)
+_extra = os.getenv("WAKE_WORD_ALIASES", "")
+WAKE_WORD_ALIASES: list = [w.strip().lower() for w in _extra.split(",") if w.strip()]
+
 # Web / Server Configuration
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))

@@ -1,14 +1,7 @@
-# M.I.N.E. Version 1 MVP
+# M.I.N.E MVP
 
 > **M.I.N.E.** — A real, functional personal desktop AI assistant built with modern voice recognition, function-calling tools, conversation context, hardware telemetry, and two-step safety guardrails.
 
----
-
-## ⚡ The Version 1 Philosophy
-
-**No holograms. No robotics. No facial recognition gimmickry. Just an authentic, responsive assistant that genuinely helps you.**
-
-```
 Speech / Web Audio
        ↓
 Speech-to-Text (STT)
