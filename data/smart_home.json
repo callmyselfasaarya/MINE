@@ -1,0 +1,29 @@
+{
+  "living_room_light": {
+    "name": "Living Room Light",
+    "type": "light",
+    "state": "off",
+    "brightness": 90,
+    "color": "warm_white"
+  },
+  "desk_lamp": {
+    "name": "Desk Lamp",
+    "type": "light",
+    "state": "off",
+    "brightness": 80,
+    "color": "daylight"
+  },
+  "smart_plug": {
+    "name": "Main Desk Power Plug",
+    "type": "switch",
+    "state": "on",
+    "power_watts": 45
+  },
+  "thermostat": {
+    "name": "Room Thermostat",
+    "type": "climate",
+    "state": "on",
+    "target_temp_c": 22.0,
+    "mode": "auto"
+  }
+}

@@ -1,5 +1,4 @@
 import inspect
-import json
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
@@ -125,6 +124,9 @@ class ToolRegistry:
 
     def get_tool(self, name: str) -> Optional[ToolDefinition]:
         return self._tools.get(name)
+
+    def get_all_tools(self) -> Dict[str, ToolDefinition]:
+        return dict(self._tools)
 
     def list_tools(self) -> List[Dict[str, Any]]:
         return [

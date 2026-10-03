@@ -47,6 +47,11 @@ def _handle_interaction(user_text: str) -> None:
     try:
         result = jarvis_agent.interact(user_text, speak_output=True)
 
+        if result.get("subagent"):
+            console.print(
+                f"[bold magenta]🤖 Sub-Agent:[/bold magenta] [bold]{result.get('subagent').title()} Agent[/bold]"
+            )
+
         if result.get("tool_called"):
             console.print(
                 f"[bold yellow]⚙️ Tool:[/bold yellow] [bold]{result.get('tool_called')}[/bold]"

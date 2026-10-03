@@ -40,6 +40,32 @@ def ask_ollama(message: str, model: str = OLLAMA_MODEL, url: str = OLLAMA_URL) -
     return data["message"]["content"]
 
 
+def format_tool_result_naturally(tool_name: str, args: Dict[str, Any], res_val: Any) -> str:
+    """Format any tool execution result into polite, natural spoken English, never raw JSON."""
+    if isinstance(res_val, dict):
+        if "confirmation" in res_val and res_val["confirmation"]:
+            return res_val["confirmation"]
+        if "message" in res_val and res_val["message"]:
+            return res_val["message"]
+        if "summary" in res_val and res_val["summary"]:
+            return res_val["summary"]
+        if "description" in res_val and res_val["description"]:
+            return res_val["description"]
+        if "status_summary" in res_val:
+            return f"System telemetry: {res_val['status_summary']}"
+        if "output" in res_val:
+            return f"The result is: {res_val['output']}"
+    if isinstance(res_val, list):
+        if tool_name == "search_web" and res_val:
+            top = res_val[0]
+            if isinstance(top, dict):
+                return f"Here is what I found: {top.get('snippet', top.get('title', ''))}"
+        return f"Completed {tool_name.replace('_', ' ')}. Found {len(res_val)} item(s)."
+    if isinstance(res_val, str) and res_val:
+        return res_val
+    return f"Completed {tool_name.replace('_', ' ')} successfully for you, {USER_NAME}."
+
+
 class LocalIntentEngine:
     """Fallback rule-based natural language intent parser for offline or keyless operation."""
 
@@ -60,6 +86,15 @@ class LocalIntentEngine:
             "hello mine", "hey jarvis", "hello jarvis", "hi jarvis", "greetings"
         ):
             return "greet_user", {}
+
+        # ── 0B. Capabilities & Skills ────────────────────────────────────────
+        if any(p in lower for p in [
+            "what are the capabilities", "what are your capabilities", "tell me your capabilities",
+            "list capabilities", "show capabilities", "what can you do", "what do you do",
+            "what are your features", "what are your skills", "what are you capable of",
+            "tell me what you can do", "what can i do", "what are my options"
+        ]):
+            return "list_capabilities", {"category": "general"}
 
         # ── 1. Time & Date ───────────────────────────────────────────────────
         # (handled in conversational fallback, no dedicated tool needed)
@@ -450,6 +485,52 @@ class LLMClient:
         # Step 4: Fallback to built-in Local Intent Parser
         return self._process_with_local_intent(clean_text, conversation_manager)
 
+    def _sanitize_to_natural_language(self, text: str, user_text: str = "") -> str:
+        """Ensure any message returned to the user or spoken via TTS is natural human language."""
+        if not text or not text.strip():
+            return f"Standing by, {USER_NAME}."
+
+        clean = text.strip()
+
+        # Strip markdown json block fences
+        if clean.startswith("```"):
+            clean = re.sub(r"^```(?:json)?\s*", "", clean)
+            clean = re.sub(r"\s*```$", "", clean).strip()
+
+        # If it starts with { and ends with }, parse and convert to natural speech
+        if clean.startswith("{") and clean.endswith("}"):
+            try:
+                data = json.loads(clean)
+                if isinstance(data, dict):
+                    # Check for direct message or explanation keys
+                    for k in ("message", "response", "text", "answer", "content", "summary", "description"):
+                        if k in data and isinstance(data[k], str) and data[k].strip():
+                            return data[k].strip()
+
+                    # Check for capability / tool keys
+                    name = data.get("name") or data.get("tool") or data.get("function")
+                    if name and "capabilit" in str(name).lower():
+                        from jarvis.tools.system import list_capabilities
+                        return list_capabilities().get("message", "I can assist you with voice, vision, screen OCR, apps, smart home, and agents.")
+
+                    # Otherwise, translate the intent / parameters into natural language
+                    params = data.get("parameters") or data.get("arguments") or data.get("args") or {}
+                    if isinstance(params, dict) and params:
+                        param_str = ", ".join(f"{k}: {v}" for k, v in params.items())
+                        return f"Regarding your request for {name or user_text or 'assistance'}, I have noted: {param_str}."
+                    elif name:
+                        return f"I have processed your request for {str(name).replace('_', ' ')}, {USER_NAME}."
+            except Exception:
+                pass
+
+        # If text contains raw json snippet, clean it up
+        if '{"name":' in clean or '{"function":' in clean:
+            clean = re.sub(r'\{[^{}]*(?:name|function)[^{}]*\}', '', clean).strip()
+            if not clean:
+                return f"I understand your request, {USER_NAME}. How would you like me to proceed?"
+
+        return clean
+
     def _process_with_ollama(self, user_text: str, conversation_manager) -> Optional[Dict[str, Any]]:
         # Fast exit if daemon is unreachable to eliminate latency
         if not self.is_ollama_active():
@@ -519,13 +600,7 @@ class LLMClient:
                 # Execute tool
                 exec_result = registry.execute(tool_name, **tool_args)
                 res_val = exec_result.get("result")
-
-                if isinstance(res_val, dict) and "confirmation" in res_val:
-                    reply = res_val["confirmation"]
-                elif isinstance(res_val, dict) and "message" in res_val:
-                    reply = f"Done, Sir. {res_val['message']}"
-                else:
-                    reply = f"I've executed {tool_name}. Result: {json.dumps(res_val)[:300]}"
+                reply = format_tool_result_naturally(tool_name, tool_args, res_val)
 
                 conversation_manager.add_tool_interaction(tool_name, tool_args, res_val)
                 conversation_manager.add_assistant_message(reply)
@@ -541,7 +616,94 @@ class LLMClient:
                 }
 
             # Plain text response from Ollama
-            reply = msg_obj.get("content", "").strip() or "Standing by, Sir."
+            raw_content = msg_obj.get("content", "").strip() or "Standing by, Sir."
+
+            # Check if Ollama returned a raw JSON tool call inside text content
+            cleaned_json = raw_content
+            if cleaned_json.startswith("```"):
+                cleaned_json = re.sub(r"^```(?:json)?\s*", "", cleaned_json)
+                cleaned_json = re.sub(r"\s*```$", "", cleaned_json).strip()
+
+            parsed_call = None
+            if cleaned_json.startswith("{") and cleaned_json.endswith("}"):
+                try:
+                    parsed_call = json.loads(cleaned_json)
+                except Exception:
+                    parsed_call = None
+
+            if isinstance(parsed_call, dict) and any(k in parsed_call for k in ("name", "function", "tool")):
+                tool_name = parsed_call.get("name") or (parsed_call.get("function") if isinstance(parsed_call.get("function"), str) else parsed_call.get("function", {}).get("name"))
+                tool_args = parsed_call.get("parameters") or parsed_call.get("arguments") or parsed_call.get("args") or {}
+                if isinstance(tool_args, str):
+                    try:
+                        tool_args = json.loads(tool_args)
+                    except Exception:
+                        tool_args = {}
+
+                # Check if tool is list_capabilities or in registry
+                if tool_name == "list_capabilities" or (tool_name and "capabilit" in str(tool_name).lower()):
+                    from jarvis.tools.system import list_capabilities
+                    cap_res = list_capabilities(**tool_args) if isinstance(tool_args, dict) else list_capabilities()
+                    reply = cap_res.get("message")
+                    conversation_manager.add_assistant_message(reply)
+                    return {
+                        "text": reply,
+                        "tool_called": "list_capabilities",
+                        "tool_args": tool_args,
+                        "tool_result": cap_res,
+                        "status": "success",
+                        "requires_confirmation": False,
+                        "provider": f"ollama ({self.ollama_model})"
+                    }
+
+                if tool_name and tool_name in registry.get_all_tools():
+                    logger.info(f"Executing embedded JSON tool call from Ollama: {tool_name}")
+                    safety_check = guardrails.check_tool_safety(tool_name, tool_args)
+                    if safety_check:
+                        msg = safety_check["message"]
+                        conversation_manager.add_assistant_message(msg)
+                        return {
+                            "text": msg,
+                            "tool_called": tool_name,
+                            "tool_args": tool_args,
+                            "status": "requires_confirmation",
+                            "requires_confirmation": True,
+                            "action_id": safety_check["action_id"],
+                            "provider": f"ollama ({self.ollama_model})"
+                        }
+
+                    exec_result = registry.execute(tool_name, **tool_args)
+                    res_val = exec_result.get("result")
+                    reply = format_tool_result_naturally(tool_name, tool_args, res_val)
+                    conversation_manager.add_tool_interaction(tool_name, tool_args, res_val)
+                    conversation_manager.add_assistant_message(reply)
+                    return {
+                        "text": reply,
+                        "tool_called": tool_name,
+                        "tool_args": tool_args,
+                        "tool_result": res_val,
+                        "status": "success",
+                        "requires_confirmation": False,
+                        "provider": f"ollama ({self.ollama_model})"
+                    }
+                else:
+                    # Tool not in registry: re-query Ollama without tools for a natural conversation reply
+                    logger.warning(f"Ollama returned unrecognized tool '{tool_name}' in JSON. Retrying in conversational mode...")
+                    try:
+                        retry_resp = requests.post(
+                            self.ollama_url,
+                            json={"model": self.ollama_model, "messages": messages, "stream": False},
+                            timeout=req_timeout
+                        )
+                        if retry_resp.status_code == 200:
+                            retry_content = retry_resp.json().get("message", {}).get("content", "").strip()
+                            if retry_content and not (retry_content.startswith("{") and retry_content.endswith("}")):
+                                raw_content = retry_content
+                    except Exception as e:
+                        logger.debug(f"Ollama conversational retry error: {e}")
+
+            # Ensure response text is sanitized into natural spoken English
+            reply = self._sanitize_to_natural_language(raw_content, user_text)
             conversation_manager.add_assistant_message(reply)
             return {
                 "text": reply,
@@ -617,12 +779,7 @@ class LLMClient:
 
             # Format friendly natural response
             tool_def = registry.get_tool(tool_name)
-            if isinstance(res_val, dict) and "confirmation" in res_val:
-                reply = res_val["confirmation"]
-            elif isinstance(res_val, dict) and "message" in res_val:
-                reply = f"Done, Sir. {res_val['message']}"
-            else:
-                reply = f"I've executed {tool_name}. Result: {json.dumps(res_val)[:300]}"
+            reply = format_tool_result_naturally(tool_name, args, res_val)
 
             conversation_manager.add_tool_interaction(tool_name, args, res_val)
             conversation_manager.add_assistant_message(reply)
@@ -638,7 +795,7 @@ class LLMClient:
             }
 
         # Plain text answer
-        reply = response.text or "Standing by, Sir."
+        reply = self._sanitize_to_natural_language(response.text or "Standing by, Sir.", user_text)
         conversation_manager.add_assistant_message(reply)
         return {
             "text": reply,
@@ -765,12 +922,14 @@ class LLMClient:
             reply = f"Here is what I found for '{args.get('query')}': {top.get('snippet', top.get('title', ''))}"
         elif tool_name == "get_wikipedia_summary" and isinstance(res_val, dict):
             reply = res_val.get("summary", "No summary found.")
+        elif tool_name == "list_capabilities" and isinstance(res_val, dict):
+            reply = res_val.get("message", "I can assist you with voice, vision, screen OCR, apps, smart home, and agents.")
         elif tool_name == "take_screenshot" and isinstance(res_val, dict):
             reply = f"Screenshot saved as '{res_val.get('filename', 'screenshot')}', Sir."
         elif isinstance(res_val, dict) and "message" in res_val:
             reply = f"Done, Sir. {res_val['message']}"
         else:
-            reply = f"Executed {tool_name}. Result: {json.dumps(res_val)[:200]}"
+            reply = format_tool_result_naturally(tool_name, args, res_val)
 
         conversation_manager.add_tool_interaction(tool_name, args, res_val)
         conversation_manager.add_assistant_message(reply)

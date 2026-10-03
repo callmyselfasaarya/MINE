@@ -44,6 +44,7 @@ Text-to-Speech (TTS)
 ## 🚀 Quick Start
 
 ### 1. Requirements
+
 Ensure Python 3.10+ is installed. Dependencies are listed in `requirements.txt`:
 ```bash
 pip install -r requirements.txt

@@ -4,41 +4,19 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from jarvis.config import MEMORY_FILE
 from jarvis.tools.registry import register_tool
+from jarvis.memory import memory, LongTermMemory, ShortTermMemory, SemanticMemory
 
 logger = logging.getLogger(__name__)
 
 def _load_memories() -> Dict[str, Any]:
-    if not MEMORY_FILE.exists():
-        return {}
-    try:
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading memory: {e}")
-        return {}
-
+    return memory.long_term.get_all()
 
 def _save_memories(data: Dict[str, Any]):
-    try:
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, default=str)
-    except Exception as e:
-        logger.error(f"Error saving memory: {e}")
-
+    memory.long_term._save(data)
 
 def get_memory_context_prompt() -> str:
     """Generate a prompt snippet containing remembered facts for the LLM."""
-    memories = _load_memories()
-    if not memories:
-        return ""
-
-    lines = ["\n[Remembered Information & User Context]:"]
-    for key, item in memories.items():
-        val = item.get("value", "")
-        cat = item.get("category", "general")
-        lines.append(f"- [{cat.upper()}] {key}: {val}")
-    return "\n".join(lines)
-
+    return memory.long_term.get_prompt_context()
 
 @register_tool(
     name="remember_fact",
@@ -50,25 +28,20 @@ def get_memory_context_prompt() -> str:
     }
 )
 def remember_fact(topic_or_key: str, information: str, category: str = "general") -> Dict[str, Any]:
-    """Store information into persistent memory."""
-    memories = _load_memories()
-    clean_key = topic_or_key.strip().lower().replace(" ", "_")
-
-    memories[clean_key] = {
-        "title": topic_or_key,
-        "value": information,
-        "category": category or "general",
-        "updated_at": datetime.now().isoformat()
-    }
-    _save_memories(memories)
-
+    """Store information into persistent long-term memory and index in semantic memory."""
+    res = memory.long_term.remember(topic_or_key, information, category)
+    # Also index into semantic memory for relevance matching
+    memory.semantic.add_entry(
+        content=f"{topic_or_key}: {information} ({category})",
+        source="fact",
+        metadata={"key": res.get("key"), "category": category}
+    )
     return {
         "success": True,
-        "key": clean_key,
+        "key": res.get("key"),
         "message": f"I have committed that to memory under '{topic_or_key}'.",
         "value": information
     }
-
 
 @register_tool(
     name="recall_facts",
@@ -78,30 +51,13 @@ def remember_fact(topic_or_key: str, information: str, category: str = "general"
     }
 )
 def recall_facts(query: str = "") -> Dict[str, Any]:
-    """Search or list remembered items."""
-    memories = _load_memories()
-    if not memories:
-        return {"success": True, "count": 0, "memories": [], "message": "My memory is currently empty, Sir."}
-
-    q = query.lower().strip()
-    results = []
-
-    for k, item in memories.items():
-        if not q or q in k or q in item.get("value", "").lower() or q in item.get("category", "").lower():
-            results.append({
-                "key": k,
-                "topic": item.get("title", k),
-                "value": item.get("value", ""),
-                "category": item.get("category", "general"),
-                "updated_at": item.get("updated_at")
-            })
-
+    """Search or list remembered items from long-term memory."""
+    results = memory.long_term.recall(query)
     return {
         "success": True,
         "count": len(results),
         "results": results
     }
-
 
 @register_tool(
     name="forget_fact",
@@ -114,12 +70,24 @@ def recall_facts(query: str = "") -> Dict[str, Any]:
 )
 def forget_fact(topic_or_key: str) -> Dict[str, Any]:
     """Remove item from memory."""
-    memories = _load_memories()
-    clean_key = topic_or_key.strip().lower().replace(" ", "_")
-
-    if clean_key in memories:
-        del memories[clean_key]
-        _save_memories(memories)
+    success = memory.long_term.forget(topic_or_key)
+    if success:
         return {"success": True, "message": f"I have forgotten information regarding '{topic_or_key}'."}
-
     return {"success": False, "error": f"No memory found matching '{topic_or_key}'."}
+
+@register_tool(
+    name="search_semantic_memory",
+    description="Perform semantic search over indexed documents, facts, and conversation snippets.",
+    parameters={
+        "query": {"type": "string", "description": "Search query or natural language concept to retrieve", "required": True},
+        "top_k": {"type": "integer", "description": "Max results to return (default 4)", "required": False}
+    }
+)
+def search_semantic_memory(query: str, top_k: int = 4) -> Dict[str, Any]:
+    """Retrieve semantically relevant knowledge."""
+    results = memory.semantic.search(query, top_k=top_k)
+    return {
+        "success": True,
+        "count": len(results),
+        "results": results
+    }

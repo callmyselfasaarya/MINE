@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -234,6 +234,89 @@ async def save_document(req: DocumentRequest):
     from jarvis.tools.files import create_document
     res = create_document(req.filename, req.content)
     return {"result": res, "state": jarvis_agent.get_dashboard_state()}
+
+
+class SmartHomeStateRequest(BaseModel):
+    device_id: str
+    state: str
+    brightness: Optional[int] = None
+    temperature: Optional[float] = None
+
+
+class SmartSceneRequest(BaseModel):
+    scene: str
+
+
+class SubAgentRequest(BaseModel):
+    task: str
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str
+    top_k: int = 4
+
+
+@app.get("/api/perception/sensors")
+async def get_sensors():
+    return jarvis_agent.perception.sensors.get_snapshot()
+
+
+@app.post("/api/perception/screen")
+async def inspect_screen():
+    return jarvis_agent.perception.inspect_visual_context()
+
+
+@app.post("/api/perception/ocr")
+async def read_screen_ocr():
+    return jarvis_agent.perception.ocr.read_screen_text()
+
+
+@app.post("/api/perception/camera")
+async def capture_camera():
+    return jarvis_agent.perception.vision.capture_camera_frame()
+
+
+@app.post("/api/agents/research")
+async def invoke_research(req: SubAgentRequest):
+    result = jarvis_agent.agents.dispatch("research", req.task)
+    return {"result": result, "state": jarvis_agent.get_dashboard_state()}
+
+
+@app.post("/api/agents/coding")
+async def invoke_coding(req: SubAgentRequest):
+    result = jarvis_agent.agents.dispatch("coding", req.task)
+    return {"result": result, "state": jarvis_agent.get_dashboard_state()}
+
+
+@app.post("/api/agents/planning")
+async def invoke_planning(req: SubAgentRequest):
+    result = jarvis_agent.planner.create_and_execute_plan(req.task)
+    return {"result": result, "state": jarvis_agent.get_dashboard_state()}
+
+
+@app.get("/api/smart-home")
+async def get_smart_home():
+    return jarvis_agent.execution.smart_home.list_devices()
+
+
+@app.post("/api/smart-home/state")
+async def set_smart_home_state(req: SmartHomeStateRequest):
+    res = jarvis_agent.execution.smart_home.set_device_state(
+        req.device_id, req.state, req.brightness, req.temperature
+    )
+    return {"result": res, "state": jarvis_agent.get_dashboard_state()}
+
+
+@app.post("/api/smart-home/scene")
+async def trigger_smart_scene_endpoint(req: SmartSceneRequest):
+    res = jarvis_agent.execution.smart_home.trigger_scene(req.scene)
+    return {"result": res, "state": jarvis_agent.get_dashboard_state()}
+
+
+@app.post("/api/memory/semantic")
+async def search_semantic(req: SemanticSearchRequest):
+    res = jarvis_agent.memory.semantic.search(req.query, top_k=req.top_k)
+    return {"results": res, "count": len(res)}
 
 
 @app.websocket("/ws")

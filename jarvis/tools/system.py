@@ -262,3 +262,32 @@ def system_power(action: str) -> Dict[str, Any]:
         return {"success": True, "message": "Putting system to sleep."}
     else:
         return {"success": False, "error": f"Invalid power action '{action}'. Choose from lock, sleep, shutdown, restart."}
+
+
+@register_tool(
+    name="list_capabilities",
+    description="List or explain the capabilities and skills of the assistant in natural language.",
+    parameters={
+        "category": {"type": "string", "description": "Optional category filter like 'general', 'voice', 'vision', 'tools'", "required": False}
+    }
+)
+def list_capabilities(category: str = "general") -> Dict[str, Any]:
+    """Provide a comprehensive explanation of assistant capabilities in natural language."""
+    from jarvis.config import ASSISTANT_NAME, USER_NAME
+    msg = (
+        f"I am {ASSISTANT_NAME}, your personal desktop AI assistant, {USER_NAME}. "
+        f"My key capabilities include: "
+        f"1. Voice Interaction: hands-free voice conversations with active acoustic echo prevention. "
+        f"2. Perception: inspecting your screen or camera, visual scene understanding, and OCR text extraction. "
+        f"3. Computer & OS Control: monitoring CPU, memory, and battery vitals, launching desktop apps, simulating hotkeys, and managing files. "
+        f"4. Knowledge & Search: searching live internet via DuckDuckGo, Google, and Wikipedia. "
+        f"5. Productivity: setting natural language reminders and scheduling calendar appointments. "
+        f"6. Smart Home: controlling lighting, switches, climate thermostats, and scene presets. "
+        f"7. Specialized Sub-Agents: conducting comprehensive multi-source research briefs, writing and safely testing Python code in an isolated sandbox, and orchestrating multi-step execution plans."
+    )
+    return {
+        "success": True,
+        "message": msg,
+        "confirmation": msg,
+        "category": category
+    }
