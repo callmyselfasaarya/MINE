@@ -12,7 +12,8 @@ from pydantic import BaseModel
 
 from jarvis.config import ASSISTANT_NAME, USER_NAME, DOCUMENTS_DIR
 from jarvis.core.agent import jarvis_agent
-from jarvis.voice.tts import register_speech_listener
+from jarvis.voice.tts import tts, register_speech_listener
+from jarvis.voice.arbiter import voice_arbiter
 from jarvis.tools.reminders import register_reminder_listener
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,21 @@ def on_agent_event(payload: Dict[str, Any]):
 
 jarvis_agent.register_event_listener(on_agent_event)
 
+# Hook voice arbiter events (system_voice_start, system_voice_end, mic_listen_start, etc.) to WebSockets
+def on_voice_arbiter_event(event_type: str, data: Dict[str, Any]):
+    on_agent_event({"event": event_type, "data": data})
+
+voice_arbiter.register_state_listener(on_voice_arbiter_event)
+
 # Hook speech & reminder triggers to WebSockets
 def on_speech(text: str):
-    on_agent_event({"event": "tts_speech", "data": {"text": text}})
+    on_agent_event({
+        "event": "tts_speech",
+        "data": {
+            "text": text,
+            "server_audio_active": (tts.speaker is not None and tts.enabled)
+        }
+    })
 
 register_speech_listener(on_speech)
 

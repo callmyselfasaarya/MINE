@@ -25,6 +25,7 @@ from jarvis.core.agent import jarvis_agent
 from jarvis.voice.stt import listen, calibrate, stt
 from jarvis.voice.tts import speak
 from jarvis.voice.wake_word import wake_engine
+from jarvis.voice.arbiter import voice_arbiter
 
 console = Console()
 
@@ -59,26 +60,35 @@ def _handle_interaction(user_text: str) -> None:
                 title=f"[bold cyan]{ASSISTANT_NAME}[/bold cyan]",
                 border_style="cyan"
             ))
+
+        # Wait for system voice playback and acoustic reverberation to complete
+        voice_arbiter.wait_for_system_voice()
     finally:
+        voice_arbiter.wait_for_system_voice()
         wake_engine.resume()
 
 
 def _on_wake_detected(utterance: str) -> None:
     """
     Called by the wake-word engine when the wake phrase is heard.
-    Plays an acknowledgement tone, then listens for the actual command.
+    Plays an acknowledgement tone, waits for speech to complete, then listens for the command.
     """
     console.print(
         f"\n[bold green]🎙️  Wake word detected![/bold green] "
         f"[dim](heard: \"{utterance}\")[/dim]"
     )
-    speak("Yes?")
+    # Block until 'Yes?' finishes speaking so mic does not capture the assistant's own voice
+    speak("Yes?", block=True)
 
     console.print("[bold green]🎙️  Listening for your command...[/bold green]")
     command = listen(timeout=7.0, phrase_time_limit=15.0)
 
     if not command or not command.strip():
-        console.print("[dim yellow]No command heard after wake word.[/dim yellow]")
+        if stt.last_filtered_echo:
+            console.print(f"[dim yellow]🛡️ Ignored system voice reflection: \"{stt.last_filtered_echo}\"[/dim yellow]")
+            stt.last_filtered_echo = None
+        else:
+            console.print("[dim yellow]No command heard after wake word.[/dim yellow]")
         wake_engine.resume()
         return
 
@@ -164,7 +174,8 @@ def run_cli(default_mode: Optional[str] = None):
     cal_thread = threading.Thread(target=calibrate, args=(0.3,), daemon=True)
     cal_thread.start()
 
-    speak(greeting_msg)
+    # Block until greeting completes so mic does not capture greeting audio
+    speak(greeting_msg, block=True)
     cal_thread.join(timeout=1.0)
 
     # Register wake word callback
@@ -175,7 +186,7 @@ def run_cli(default_mode: Optional[str] = None):
         console.print(Panel(
             f"[bold green]🎙️ MIC MODE ACTIVE (PRIMARY)[/bold green]\n\n"
             f"• {ASSISTANT_NAME} is listening automatically for your voice.\n"
-            f"• Speak your requests freely into your microphone.\n"
+            f"• Voice Differentiation & Echo Cancellation is ACTIVE (system voice bleed suppressed).\n"
             f"• Say [bold]\"switch to text\"[/bold] or press [bold][Enter][/bold] to switch to Keyboard Text Mode.\n"
             f"• Say [bold]\"quit\"[/bold] or [bold]\"exit\"[/bold] to shut down.",
             title="[bold green]Hands-Free Voice Communication[/bold green]",
@@ -209,6 +220,10 @@ def run_cli(default_mode: Optional[str] = None):
                     console.print("\n[bold yellow]⌨️ Switched to Keyboard Text Mode.[/bold yellow] [dim](Type /mic to return to Voice Mode)[/dim]")
                     continue
 
+                # Ensure system voice has finished speaking before opening mic
+                if voice_arbiter.is_system_speaking(include_cooldown=True):
+                    voice_arbiter.wait_for_system_voice()
+
                 if silence_count == 0:
                     console.print(f"[bold green]🎙️ Listening to {USER_NAME}...[/bold green] [dim](Speak now or press Enter for text)[/dim]")
 
@@ -223,6 +238,10 @@ def run_cli(default_mode: Optional[str] = None):
                     continue
 
                 if not heard or not heard.strip():
+                    if stt.last_filtered_echo:
+                        console.print(f"[dim yellow]🛡️ Differentiated system voice echo: \"{stt.last_filtered_echo}\" (suppressed)[/dim yellow]")
+                        stt.last_filtered_echo = None
+                        continue
                     if stt.last_error:
                         console.print(f"[bold red]⚠️ {stt.last_error}[/bold red]")
                     silence_count += 1
@@ -333,6 +352,54 @@ def run_cli(default_mode: Optional[str] = None):
                     _toggle_wake_word(False)
                 else:
                     _toggle_wake_word(not wake_engine.is_running)
+                continue
+
+            if lower.startswith("/voice"):
+                parts = lower.split(maxsplit=2)
+                sub = parts[1].strip() if len(parts) > 1 else "status"
+
+                if sub in ("status", "info"):
+                    status = voice_arbiter.get_status()
+                    metrics = status["metrics"]
+                    table = Table(title="[bold cyan]Voice Arbiter & Source Differentiation Status[/bold cyan]", border_style="cyan")
+                    table.add_column("Property", style="bold white")
+                    table.add_column("Value", style="bold yellow")
+                    table.add_column("Description", style="dim")
+
+                    sys_status = "[bold red]SPEAKING[/bold red]" if status["is_system_speaking"] else "[bold green]IDLE[/bold green]"
+                    mic_status = "[bold green]LISTENING[/bold green]" if status["is_mic_listening"] else "[dim]IDLE[/dim]"
+                    echo_status = "[bold green]ENABLED[/bold green]" if status["echo_cancellation_enabled"] else "[bold red]DISABLED[/bold red]"
+
+                    table.add_row("System Voice Output", sys_status, "Assistant TTS / Audio Playback state")
+                    table.add_row("Microphone Voice Input", mic_status, "User microphone capture state")
+                    table.add_row("Echo Cancellation", echo_status, "Acoustic feedback filtering")
+                    table.add_row("Echo Cooldown Buffer", f"{status['echo_cooldown']}s", "Settling delay after speech ends")
+                    table.add_row("Similarity Threshold", f"{status['similarity_threshold']}", "Difflib ratio for echo matching")
+                    table.add_row("Total Inputs Evaluated", str(metrics["total_inputs_evaluated"]), "Raw audio transcripts analyzed")
+                    table.add_row("System Echoes Filtered", f"[bold yellow]{metrics['system_echoes_filtered']}[/bold yellow]", "Self-voice reflections suppressed")
+                    table.add_row("User Voices Accepted", f"[bold green]{metrics['user_voices_accepted']}[/bold green]", "Genuine human inputs processed")
+                    if metrics.get("last_filtered_echo"):
+                        table.add_row("Last Filtered Echo", f"\"{metrics['last_filtered_echo']}\"", metrics.get("last_filter_reason", ""))
+                    if status.get("last_speech_text"):
+                        table.add_row("Last System Speech", f"\"{status['last_speech_text'][:40]}...\"", "Recent assistant output")
+
+                    console.print(table)
+                    console.print("[dim]Use [bold]/voice echo on[/bold] or [bold]/voice echo off[/bold] to toggle.[/dim]")
+
+                elif sub == "echo":
+                    arg = parts[2].strip() if len(parts) > 2 else ""
+                    if arg in ("on", "enable", "true"):
+                        voice_arbiter.echo_cancellation_enabled = True
+                        console.print("[bold green]✅ System Voice Echo Cancellation ENABLED.[/bold green]")
+                    elif arg in ("off", "disable", "false"):
+                        voice_arbiter.echo_cancellation_enabled = False
+                        console.print("[bold red]🔇 System Voice Echo Cancellation DISABLED.[/bold red]")
+                    else:
+                        voice_arbiter.echo_cancellation_enabled = not voice_arbiter.echo_cancellation_enabled
+                        st = "ENABLED" if voice_arbiter.echo_cancellation_enabled else "DISABLED"
+                        console.print(f"[bold cyan]Echo Cancellation is now {st}.[/bold cyan]")
+                else:
+                    console.print("[dim yellow]Usage: /voice status • /voice echo [on|off][/dim yellow]")
                 continue
 
             # Normal text interaction

@@ -113,12 +113,74 @@ class MineHUDApp {
     } else if (event === 'reminder_triggered') {
       this.notifyReminder(data);
       this.loadState();
+    } else if (event === 'system_voice_start') {
+      this.onSystemVoiceStart(data.text);
+    } else if (event === 'system_voice_end') {
+      this.onSystemVoiceEnd();
     } else if (event === 'tts_speech' && this.speechEnabled) {
-      this.speakText(data.text);
+      if (!data.server_audio_active) {
+        this.speakText(data.text);
+      } else {
+        // Server SAPI is already speaking out loud, update visual state without double-speaking
+        this.onSystemVoiceStart(data.text);
+      }
     } else if (event === 'action_confirmed' || event === 'action_cancelled') {
       this.hideHazardModal();
       this.loadState();
     }
+  }
+
+  onSystemVoiceStart(text) {
+    this.isSystemSpeaking = true;
+    if (text) {
+      if (!this.recentSystemSpeech) this.recentSystemSpeech = [];
+      this.recentSystemSpeech.push({ text: text.toLowerCase().trim(), time: Date.now() });
+      if (this.recentSystemSpeech.length > 20) {
+        this.recentSystemSpeech.shift();
+      }
+    }
+    this.setVisualState('speaking');
+
+    // Pause browser speech recognition during System Voice playback to prevent acoustic feedback
+    if (this.recognition && this.isListening) {
+      console.log('[M.I.N.E] Pausing microphone recognition during System Voice output.');
+      try {
+        this.recognition.abort();
+      } catch (e) {}
+      this.isListening = false;
+      this.micBtn.classList.remove('active');
+    }
+  }
+
+  onSystemVoiceEnd() {
+    this.isSystemSpeaking = false;
+    setTimeout(() => {
+      if (this.state === 'speaking' && !this.isSystemSpeaking) {
+        this.setVisualState('idle');
+      }
+    }, 450);
+  }
+
+  isSystemVoiceEcho(transcript) {
+    if (!transcript) return false;
+    const clean = transcript.toLowerCase().trim();
+    if (!clean) return false;
+
+    if (this.isSystemSpeaking || this.state === 'speaking') {
+      return true;
+    }
+
+    const now = Date.now();
+    if (this.recentSystemSpeech) {
+      for (const item of this.recentSystemSpeech) {
+        if (now - item.time > 15000) continue;
+        const sys = item.text;
+        if (clean === sys) return true;
+        if (sys.includes(clean) && (clean.length > 3 || clean.split(' ').length > 1)) return true;
+        if (clean.includes(sys) && sys.length > 4) return true;
+      }
+    }
+    return false;
   }
 
   notifyReminder(reminder) {
@@ -154,6 +216,14 @@ class MineHUDApp {
     this.recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       console.log('[M.I.N.E] Heard speech:', transcript);
+
+      // Differentiate system voice reflection from microphone voice
+      if (this.isSystemVoiceEcho(transcript)) {
+        console.warn('[M.I.N.E] Differentiated system voice reflection in browser mic (suppressed):', transcript);
+        this.stopListening();
+        return;
+      }
+
       this.cmdInput.value = transcript;
       this.sendMessage(transcript);
     };
@@ -225,6 +295,8 @@ class MineHUDApp {
     if (!('speechSynthesis' in window) || !this.speechEnabled || !text) return;
     window.speechSynthesis.cancel();
 
+    this.onSystemVoiceStart(text);
+
     const utterance = new SpeechSynthesisUtterance(text);
     if (this.selectedVoice) {
       utterance.voice = this.selectedVoice;
@@ -237,13 +309,11 @@ class MineHUDApp {
     };
 
     utterance.onend = () => {
-      if (this.state === 'speaking') {
-        this.setVisualState('idle');
-      }
+      this.onSystemVoiceEnd();
     };
 
     utterance.onerror = () => {
-      this.setVisualState('idle');
+      this.onSystemVoiceEnd();
     };
 
     window.speechSynthesis.speak(utterance);

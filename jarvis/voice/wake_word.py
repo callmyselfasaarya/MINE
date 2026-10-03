@@ -29,6 +29,7 @@ from jarvis.config import (
     WAKE_WORD_ALIASES,
     STT_ENERGY_THRESHOLD,
 )
+from jarvis.voice.arbiter import voice_arbiter
 
 logger = logging.getLogger(__name__)
 
@@ -141,12 +142,25 @@ class WakeWordEngine:
         """Main detection loop — runs in daemon thread."""
         logger.debug("Wake-word detection loop started.")
         while self._running:
-            if self._paused:
+            # Pause listening while assistant is speaking or acoustic cooldown is active
+            if self._paused or voice_arbiter.is_system_speaking(include_cooldown=True):
                 time.sleep(0.2)
                 continue
             try:
                 heard = self._capture_phrase()
-                if heard and self._is_wake(heard):
+                if not heard:
+                    continue
+
+                # Differentiate system voice from user voice: reject acoustic reflection
+                diff = voice_arbiter.differentiate_input(heard)
+                if diff["is_system_echo"]:
+                    logger.info(
+                        f"[Wake-word] Rejected system voice reflection: '{heard}' "
+                        f"(matched: '{diff['matched_phrase']}', reason: {diff['reason']})"
+                    )
+                    continue
+
+                if self._is_wake(heard):
                     logger.info(f"Wake word detected in: '{heard}'")
                     self.pause()   # Suppress re-trigger while handling
                     self._fire(heard)

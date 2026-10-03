@@ -159,17 +159,49 @@ Run MINE purely from the command line with rich formatting and hands-free voice:
 python main.py --cli
 ```
 - **🎙️ Mic Mode (Primary by default)**: The assistant speaks its greeting and immediately listens for your voice commands hands-free. After each response, it automatically listens for your next request.
+- **🛡️ Voice Source Differentiation**: System Voice (TTS/speaker output) and Microphone Voice (user speech) are actively arbitrated. The microphone will not record while the assistant is speaking, and acoustic reflections from speakers are recognized and discarded.
 - **⌨️ Keyboard Mode**: Press `[Enter]` or say `"switch to text"` to switch to typing mode (`python main.py --cli --text` forces text mode).
+- **Voice Diagnostic Commands**: Type `/voice status` in text mode to inspect real-time voice differentiation metrics or `/voice echo [on|off]` to toggle echo cancellation.
 - **Mode Switching**: Type `/mic` to return to continuous voice mode, `/text` for text mode, or `/wake` to toggle wake-word standby.
 - Displays live tool execution traces and confirmation dialogs.
 
 ---
 
+## 🎙️ Voice Differentiation & Anti-Overlap Architecture
+
+To eliminate audio overlapping, self-triggering, and acoustic feedback loops, M.I.N.E. features a dedicated **Voice Arbiter** (`jarvis.voice.arbiter`):
+
+```
+┌────────────────────────────────────────────────────────┐
+│               M.I.N.E. VOICE ARBITER                   │
+├──────────────────────────┬─────────────────────────────┤
+│   🔊 SYSTEM VOICE        │      🎙️ MICROPHONE VOICE     │
+│   (TTS / SAPI / Output)  │      (User Input / STT)     │
+├──────────────────────────┼─────────────────────────────┤
+│ • Tracks playback state  │ • Pre-listen wait for quiet │
+│ • History of utterances  │ • Acoustic cooldown buffer  │
+│ • Prevents dual playback │ • Multi-signature echo test │
+│ • Broadcasts sync events │ • Filters speaker bleed     │
+└──────────────────────────┴─────────────────────────────┘
+```
+
+1. **Active State Synchronization**: The microphone stream never opens while the system voice is speaking.
+2. **Acoustic Cooldown**: An acoustic settling window (default `0.45s`) allows room reverberation and hardware audio buffers to clear before listening starts.
+3. **Multi-Signature Echo Rejection**: Any audio captured from the microphone is differentiated against recent system utterances using:
+   - Exact match comparison
+   - Substring & fragment detection (e.g., catching tails of assistant sentences)
+   - Sequence similarity scoring (`difflib` ratio threshold)
+   - Token overlap & coverage (Jaccard similarity)
+   - Wake-word self-bleed detection (prevents assistant from waking itself when it mentions its name)
+4. **Dual Playback Elimination**: Server SAPI and browser Web Speech synthesis are coordinated via WebSocket events so the system never speaks over itself with two voices.
+
+---
+
 ## 🧪 Testing
 
-Run the automated test suite to verify all core capabilities and guardrails:
+Run the automated test suite to verify voice differentiation, acoustic echo cancellation, and core functionality:
 ```bash
-python -m unittest tests/test_jarvis_mvp.py
+python -m unittest discover tests
 ```
 
 ---
@@ -185,9 +217,12 @@ M.I.N.E/
 ├── mine/                       # Package namespace
 │   ├── __init__.py             # M.I.N.E package export
 │   └── cli.py                  # CLI launcher alias
+├── tests/                      # Automated test suite
+│   ├── test_voice_arbiter.py   # Unit tests for Voice Arbiter & echo filtering
+│   └── test_voice_integration.py # Integration tests for STT, TTS, and Arbiter
 ├── jarvis/                     # Core system modules
 │   ├── config.py               # Settings, paths, and system prompts
-│   ├── cli.py                  # Rich terminal CLI interface
+│   ├── cli.py                  # Rich terminal CLI interface with /voice command
 │   ├── core/
 │   │   ├── agent.py            # Central orchestrator (STT -> LLM -> Tools -> TTS)
 │   │   ├── llm.py              # Gemini/Ollama client + Local Intent engine
@@ -196,8 +231,10 @@ M.I.N.E/
 │   │   ├── memory.py           # Long-term memory store & context prompt injector
 │   │   └── guardrails.py       # Two-step confirmation safety system
 │   ├── voice/
-│   │   ├── stt.py              # Speech-to-Text recognizer
-│   │   └── tts.py              # Text-to-Speech synthesizer
+│   │   ├── arbiter.py          # Voice Arbiter: source differentiator & acoustic echo cancellation
+│   │   ├── stt.py              # Speech-to-Text recognizer with echo suppression
+│   │   ├── tts.py              # Text-to-Speech synthesizer with acoustic settling
+│   │   └── wake_word.py        # Background wake-word engine with self-trigger bleed rejection
 │   ├── tools/
 │   │   ├── registry.py         # Tool registry and Gemini/Ollama schema generator
 │   │   ├── search.py           # DuckDuckGo and Wikipedia search

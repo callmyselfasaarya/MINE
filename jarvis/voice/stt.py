@@ -12,6 +12,8 @@ from jarvis.config import (
     MIC_DEVICE_INDEX,
 )
 
+from jarvis.voice.arbiter import voice_arbiter
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,6 +93,7 @@ class STTEngine:
 
         self._calibrated = False
         self.last_error: Optional[str] = None
+        self.last_filtered_echo: Optional[str] = None
 
     def get_microphones(self) -> List[Dict[str, Any]]:
         """List all available microphone input devices."""
@@ -111,6 +114,10 @@ class STTEngine:
 
     def calibrate(self, duration: float = 0.3) -> None:
         """Calibrate ambient noise so subsequent listens start instantaneously without clipping voice."""
+        # Wait if system voice is actively speaking before calibrating ambient noise
+        if voice_arbiter.is_system_speaking(include_cooldown=True):
+            voice_arbiter.wait_for_system_voice(timeout=5.0)
+
         try:
             with sr.Microphone(device_index=self.device_index) as source:
                 logger.info("Calibrating ambient noise...")
@@ -124,27 +131,65 @@ class STTEngine:
         self,
         timeout: float = 6.0,
         phrase_time_limit: float = 15.0,
-        on_ready: Optional[Callable[[], None]] = None
+        on_ready: Optional[Callable[[], None]] = None,
+        filter_echo: bool = True,
+        wait_for_system_voice: bool = True,
     ) -> Optional[str]:
-        """Listen to the microphone and return transcribed text, or None if no speech."""
+        """
+        Listen to the microphone and return transcribed text, or None if no speech / echo suppressed.
+        Automatically waits for any active System Voice to finish speaking before opening the microphone,
+        and differentiates acoustic feedback of system speech so the assistant never loops or answers itself.
+        """
         self.last_error = None
+        self.last_filtered_echo = None
+
+        # 1. Pre-listen: Wait for active System Voice to finish speaking + acoustic cooldown
+        if wait_for_system_voice and voice_arbiter.is_system_speaking(include_cooldown=True):
+            logger.info("[STT] System Voice is active. Waiting for system speech to finish before listening...")
+            voice_arbiter.wait_for_system_voice(timeout=10.0)
+
         try:
-            with sr.Microphone(device_index=self.device_index) as source:
-                if not self._calibrated:
-                    logger.info("Calibrating ambient noise once...")
-                    self.recognizer.adjust_for_ambient_noise(source, duration=0.3)
-                    self._calibrated = True
+            # 2. Capture microphone input
+            voice_arbiter.notify_listen_start()
+            try:
+                with sr.Microphone(device_index=self.device_index) as source:
+                    if not self._calibrated:
+                        logger.info("Calibrating ambient noise once...")
+                        self.recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                        self._calibrated = True
 
-                if on_ready:
-                    on_ready()
+                    if on_ready:
+                        on_ready()
 
-                logger.info("Listening for speech...")
-                audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+                    logger.info("Listening for user speech on microphone...")
+                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+            finally:
+                voice_arbiter.notify_listen_end()
 
-            logger.info("Transcribing audio...")
+            # 3. Transcribe audio
+            logger.info("Transcribing microphone audio...")
             text = self.recognizer.recognize_google(audio)
-            logger.info(f"Transcribed: '{text}'")
-            return text.strip()
+            clean_text = text.strip() if text else ""
+            logger.info(f"Transcribed raw mic input: '{clean_text}'")
+
+            if not clean_text:
+                return None
+
+            # 4. Voice Source Differentiation & Echo Cancellation
+            if filter_echo:
+                diff = voice_arbiter.differentiate_input(clean_text)
+                if diff["is_system_echo"]:
+                    self.last_filtered_echo = clean_text
+                    logger.warning(
+                        f"[STT] Filtered system voice echo: '{clean_text}' "
+                        f"(matched system phrase: '{diff['matched_phrase']}', "
+                        f"reason: {diff['reason']}, confidence: {diff['confidence']:.2f}). "
+                        f"Suppressed to prevent overlapping speech."
+                    )
+                    return None
+
+            return clean_text
+
         except sr.WaitTimeoutError:
             logger.debug("Listening timed out waiting for speech.")
             return None

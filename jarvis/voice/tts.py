@@ -3,6 +3,7 @@ import queue
 import threading
 from typing import Callable, List, Optional
 from jarvis.config import TTS_ENABLED, TTS_RATE, TTS_VOLUME
+from jarvis.voice.arbiter import voice_arbiter
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,9 @@ class TTSEngine:
             if text is None:
                 break
             try:
+                # Notify Voice Arbiter that System Voice has begun output
+                voice_arbiter.notify_speech_start(text)
+
                 # Notify listeners (such as WebSocket client for browser speech synthesis)
                 for cb in _speech_listeners:
                     try:
@@ -61,16 +65,49 @@ class TTSEngine:
             except Exception as e:
                 logger.error(f"TTS Worker encountered an error: {e}")
             finally:
+                # Notify Voice Arbiter that System Voice has finished output
+                voice_arbiter.notify_speech_end()
                 self.queue.task_done()
 
-    def speak(self, text: str, block: bool = False):
-        """Speak the given text asynchronously or synchronously."""
+    def speak(self, text: str, block: bool = False, timeout: float = 15.0):
+        """
+        Speak the given text asynchronously or synchronously.
+        When block=True, waits until the speech is complete and room acoustic reverb settles.
+        """
         if not text or not text.strip():
             return
         clean_text = text.strip()
         self.queue.put(clean_text)
         if block:
             self.queue.join()
+            voice_arbiter.wait_for_system_voice(timeout=timeout)
+
+    def wait_until_done(self, timeout: float = 15.0) -> bool:
+        """Wait until all queued and active system speech has finished playing."""
+        self.queue.join()
+        return voice_arbiter.wait_for_system_voice(timeout=timeout)
+
+    @property
+    def is_speaking(self) -> bool:
+        """Check if system voice is actively speaking or in acoustic cooldown."""
+        return voice_arbiter.is_system_speaking(include_cooldown=True)
+
+    def stop(self):
+        """Immediately abort active speech and clear the speech queue."""
+        # Drain pending queue
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+                self.queue.task_done()
+            except queue.Empty:
+                break
+        # SVSFPurgeBeforeSpeak = 2 in SAPI purges current speech
+        if self.speaker:
+            try:
+                self.speaker.Speak("", 2)
+            except Exception as e:
+                logger.debug(f"SAPI purge error: {e}")
+        voice_arbiter.notify_speech_end()
 
     def set_enabled(self, enabled: bool):
         self.enabled = enabled
@@ -79,3 +116,4 @@ class TTSEngine:
 # Global instance
 tts = TTSEngine()
 speak = tts.speak
+

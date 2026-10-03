@@ -42,6 +42,13 @@ STT_ENERGY_THRESHOLD = int(os.getenv("STT_ENERGY_THRESHOLD", "180"))
 STT_PAUSE_THRESHOLD = float(os.getenv("STT_PAUSE_THRESHOLD", "0.8"))
 STT_DYNAMIC_ENERGY = os.getenv("STT_DYNAMIC_ENERGY", "true").lower() in ("true", "1", "yes")
 
+# Voice Differentiation & Echo Cancellation Configuration
+VOICE_ECHO_CANCELLATION = os.getenv("VOICE_ECHO_CANCELLATION", "true").lower() in ("true", "1", "yes")
+VOICE_ECHO_COOLDOWN = float(os.getenv("VOICE_ECHO_COOLDOWN", "0.45"))
+VOICE_ECHO_SIMILARITY_THRESHOLD = float(os.getenv("VOICE_ECHO_SIMILARITY_THRESHOLD", "0.65"))
+VOICE_ECHO_HISTORY_WINDOW = float(os.getenv("VOICE_ECHO_HISTORY_WINDOW", "20.0"))
+TTS_DUAL_PLAYBACK_PREVENTION = os.getenv("TTS_DUAL_PLAYBACK_PREVENTION", "true").lower() in ("true", "1", "yes")
+
 # Wake Word Configuration
 WAKE_WORD = os.getenv("WAKE_WORD", "hey mine").lower().strip()
 WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() in ("true", "1", "yes")

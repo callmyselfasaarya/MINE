@@ -7,6 +7,7 @@ from jarvis.core.guardrails import guardrails
 from jarvis.core.llm import llm
 from jarvis.voice.tts import speak
 from jarvis.voice.stt import listen
+from jarvis.voice.arbiter import voice_arbiter
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,8 @@ class JarvisAgent:
             }
 
         llm_info = self.llm.get_status_info()
+        voice_info = voice_arbiter.get_status()
+
         return {
             "assistant_name": self.name,
             "user_name": self.user_name,
@@ -152,7 +155,10 @@ class JarvisAgent:
             "calendar_events": calendar_data,
             "memories": memories_data,
             "documents": docs_data,
-            "pending_confirmation": pending_data
+            "pending_confirmation": pending_data,
+            "voice_state": voice_info,
+            "is_system_speaking": voice_info["is_system_speaking"],
+            "is_mic_listening": voice_info["is_mic_listening"],
         }
 
 
