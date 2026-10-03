@@ -28,36 +28,6 @@ BANNER = f"""[bold cyan]
 """
 
 
-def print_status_table():
-    state = jarvis_agent.get_dashboard_state()
-    table = Table(title="[bold cyan]System State[/bold cyan]", border_style="cyan")
-    table.add_column("Module", style="bold white")
-    table.add_column("Status / Count", style="green")
-
-    ai_mode = state.get("active_label", "Local Intent Engine (Active)")
-    table.add_row("🧠 AI Brain", ai_mode)
-
-    sys_info = state.get("system_status", {})
-    cpu = sys_info.get("cpu_usage_percent", "N/A")
-    ram = sys_info.get("ram_usage_percent", "N/A")
-    table.add_row("🖥️ Hardware", f"CPU: {cpu}% | RAM: {ram}%")
-
-    table.add_row("⏰ Reminders", f"{len(state.get('reminders', []))} pending")
-    table.add_row("📅 Calendar", f"{len(state.get('calendar_events', []))} events")
-    table.add_row("🧠 Long-Term Memory", f"{len(state.get('memories', []))} facts remembered")
-    table.add_row("📁 Documents", f"{len(state.get('documents', []))} files")
-
-    # Show wake-word status
-    wake_status = (
-        f"[bold green]ACTIVE[/bold green] — listening for [bold cyan]\"{wake_engine.wake_word}\"[/bold cyan]"
-        if wake_engine.is_running
-        else "[dim]OFF[/dim]"
-    )
-    table.add_row("🎙️ Wake Word", wake_status)
-
-    console.print(table)
-
-
 def _handle_interaction(user_text: str) -> None:
     """Run a full interact cycle and print the result to console."""
     # Pause wake-word detection while we process + respond
@@ -148,7 +118,6 @@ def _toggle_wake_word(enable: bool) -> None:
 
 def run_cli():
     console.print(BANNER)
-    print_status_table()
 
     all_triggers = [WAKE_WORD] + WAKE_WORD_ALIASES
     triggers_str = " / ".join(f'"{t}"' for t in all_triggers)
@@ -203,10 +172,6 @@ def run_cli():
                 console.print(f"[bold red]Shutting down {ASSISTANT_NAME} session. Goodbye, {USER_NAME}.[/bold red]")
                 speak(f"Shutting down session. Goodbye, {USER_NAME}.")
                 break
-
-            if lower in ("/status", "status"):
-                print_status_table()
-                continue
 
             # /wake  → toggle on
             # /wake on  → enable
