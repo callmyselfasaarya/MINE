@@ -154,12 +154,14 @@ python main.py
 - Real-time audio waveform visualizer and live telemetry panels.
 
 ### Option B: Interactive Terminal CLI
-Run MINE purely from the command line with colored rich formatting:
+Run MINE purely from the command line with rich formatting and hands-free voice:
 ```bash
 python main.py --cli
 ```
-- Type your commands or type `/mic` to activate microphone voice input.
-- Displays tool execution traces and confirmation dialogs.
+- **🎙️ Mic Mode (Primary by default)**: The assistant speaks its greeting and immediately listens for your voice commands hands-free. After each response, it automatically listens for your next request.
+- **⌨️ Keyboard Mode**: Press `[Enter]` or say `"switch to text"` to switch to typing mode (`python main.py --cli --text` forces text mode).
+- **Mode Switching**: Type `/mic` to return to continuous voice mode, `/text` for text mode, or `/wake` to toggle wake-word standby.
+- Displays live tool execution traces and confirmation dialogs.
 
 ---
 

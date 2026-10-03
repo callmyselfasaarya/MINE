@@ -32,12 +32,15 @@ OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "25"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")).strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-# Voice Configuration
+# Voice & Input Configuration
+PRIMARY_INPUT_MODE = os.getenv("PRIMARY_INPUT_MODE", "mic").lower().strip()
 TTS_ENABLED = os.getenv("TTS_ENABLED", "true").lower() in ("true", "1", "yes")
 TTS_RATE = int(os.getenv("TTS_RATE", "190"))
 TTS_VOLUME = float(os.getenv("TTS_VOLUME", "1.0"))
-STT_ENERGY_THRESHOLD = int(os.getenv("STT_ENERGY_THRESHOLD", "300"))
+MIC_DEVICE_INDEX = int(os.getenv("MIC_DEVICE_INDEX", "-1"))
+STT_ENERGY_THRESHOLD = int(os.getenv("STT_ENERGY_THRESHOLD", "180"))
 STT_PAUSE_THRESHOLD = float(os.getenv("STT_PAUSE_THRESHOLD", "0.8"))
+STT_DYNAMIC_ENERGY = os.getenv("STT_DYNAMIC_ENERGY", "true").lower() in ("true", "1", "yes")
 
 # Wake Word Configuration
 WAKE_WORD = os.getenv("WAKE_WORD", "hey mine").lower().strip()
